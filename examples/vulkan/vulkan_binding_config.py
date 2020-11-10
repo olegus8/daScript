@@ -31,6 +31,7 @@ class Config(ConfigBase):
             '*',
             'unsigned long',
 
+            #TODO: bind unions as structs
             # the following are unions:
             'VkClearColorValue',
             'VkClearValue',
