@@ -19,6 +19,7 @@ class Config(ConfigBase):
         ):
             field.ignore()
         for kw in [
+            #TODO: bind _T * handles as DummyType(..._T)
             '*',
             'unsigned long',
 
