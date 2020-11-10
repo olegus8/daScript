@@ -29,11 +29,11 @@ struct SecondStruct {
 
 //FIXME: following are used in vulkan but not supported by das yet
 
-
+/*
 struct StructWithArray {
-    int32_t some_chars[10];
+    char some_chars[10];
 };
-
+*/
 
 /*
 struct StructWithBitFields {
