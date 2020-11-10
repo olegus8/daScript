@@ -17,6 +17,15 @@ FIND_PYTHON3()
 FIND_VULKAN()
 
 SETUP_COMPILER()
+
+FILE(GLOB DAS_MODULES "modules/*" RELATIVE "./modules")
+FOREACH(module ${DAS_MODULES})
+    INCLUDE(modules/${module}/CMakeCommon.txt)
+ENDFOREACH()
+FOREACH(module ${DAS_MODULES})
+    INCLUDE(modules/${module}/CMakeLists.txt)
+ENDFOREACH()
+
 SETUP_UTILS()
 
 FLEX(src/parser/ds_lexer.lpp)
