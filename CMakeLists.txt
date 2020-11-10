@@ -17,7 +17,7 @@ FIND_FLEX_AND_BISON()
 SETUP_COMPILER()
 
 FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
-MESSAGE(STATUS "Found modules: ${DAS_MODULES}")
+MESSAGE(STATUS "Found das modules: ${DAS_MODULES}")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
