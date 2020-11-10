@@ -97,10 +97,6 @@ MACRO(FIND_FLEX_AND_BISON)
 	find_package(FLEX)
 ENDMACRO(FIND_FLEX_AND_BISON)
 
-MACRO(FIND_PYTHON3)
-    find_package(Python3)
-ENDMACRO(FIND_PYTHON3)
-
 MACRO(FIND_VULKAN)
     find_package(Vulkan)
 ENDMACRO(FIND_VULKAN)
@@ -162,12 +158,6 @@ MACRO(SETUP_UTILS)
         src/python/das/shared/assertions.py
         src/python/das/shared/object_base.py
         src/python/das/shared/op_sys.py
-    )
-    SET(DAS_BINDER_SRC
-        src/python/das/binder/__init__.py
-        src/python/das/binder/binder.py
-        src/python/das/binder/config.py
-        utils/dasBinder/main.py
     )
     SET(DAS_GEN_FOR_EACH_SRC
         src/python/das/gen_for_each/__init__.py

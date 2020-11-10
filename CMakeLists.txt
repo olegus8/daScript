@@ -20,10 +20,10 @@ SETUP_COMPILER()
 
 FILE(GLOB DAS_MODULES "modules/*" RELATIVE "./modules")
 FOREACH(module ${DAS_MODULES})
-    INCLUDE(modules/${module}/CMakeCommon.txt)
+    INCLUDE(modules/${module}/CMakeCommon.txt OPTIONAL)
 ENDFOREACH()
 FOREACH(module ${DAS_MODULES})
-    INCLUDE(modules/${module}/CMakeLists.txt)
+    INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
 
 SETUP_UTILS()
