@@ -21,6 +21,11 @@ class Config(ConfigBase):
         for kw in [
             #TODO: bind _T * handles as DummyType(..._T)
             '*',
+            #TODO: hints from Boris:
+            # ast_typedecl.h
+            # options log_infer_passes = true
+            # options log = true
+            # ast_lint.cpp -- for options
             'unsigned long',
 
             # the following are unions:
