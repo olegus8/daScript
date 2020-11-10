@@ -15,6 +15,8 @@ class Config(ConfigBase):
         #FIXME: make it work for all fields
         if (field.is_array
             or field.name.startswith('pfn')
+
+            #TODO: generate accessors for these
             or field.is_bit_field
         ):
             field.ignore()
