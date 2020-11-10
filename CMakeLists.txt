@@ -304,6 +304,8 @@ SETUP_CPP11(libDaScript)
 
 IF(DAS_GEN_FOR_EACH_FOUND)
     DAS_GEN_FOR_EACH(include/daScript/simulate/for_each.h ${MAX_DAS_FOR_EACH_ARGS})
+ELSE()
+    MESSAGE(STATUS "dasGenForEach not found. Pre-generated files will be used.")
 ENDIF()
 
 # AOT compiler
