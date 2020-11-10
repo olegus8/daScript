@@ -318,6 +318,7 @@ int main( int argc, char * argv[] ) {
         setDasRoot(argv[1]);
     }
     setCommandLineArguments(argc,argv);
+    // ptr_ref_count::ref_count_track = 0x1242c;
     // das_track_string_breakpoint(189);
     // das_track_breakpoint(8);
     // _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -359,6 +360,7 @@ int main( int argc, char * argv[] ) {
     unit_test(getDasRoot() +  TEST_NAME,false);
     // unit_test(getDasRoot() +  TEST_NAME,true);
     Module::Shutdown();
+    // dumpTrackingLeaks();
     getchar();
     return 0;
 #endif
