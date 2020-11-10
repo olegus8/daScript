@@ -4208,6 +4208,7 @@ struct VkClearValueAnnotation
 : public ManagedStructureAnnotation<VkClearValue,true,true> {
     VkClearValueAnnotation(ModuleLibrary & ml)
     : ManagedStructureAnnotation ("VkClearValue", ml) {
+        addField<DAS_BIND_MANAGED_FIELD(color)>("color");
         addField<DAS_BIND_MANAGED_FIELD(depthStencil)>("depthStencil");
     }
     virtual bool isLocal() const override { return true; }
@@ -4221,6 +4222,7 @@ struct VkClearAttachmentAnnotation
     : ManagedStructureAnnotation ("VkClearAttachment", ml) {
         addField<DAS_BIND_MANAGED_FIELD(aspectMask)>("aspectMask");
         addField<DAS_BIND_MANAGED_FIELD(colorAttachment)>("colorAttachment");
+        addField<DAS_BIND_MANAGED_FIELD(clearValue)>("clearValue");
     }
     virtual bool isLocal() const override { return true; }
     virtual bool canCopy() const override { return true; }
@@ -6676,6 +6678,7 @@ struct VkPipelineExecutableStatisticKHRAnnotation
     : ManagedStructureAnnotation ("VkPipelineExecutableStatisticKHR", ml) {
         addField<DAS_BIND_MANAGED_FIELD(sType)>("sType");
         addField<DAS_BIND_MANAGED_FIELD(format)>("format");
+        addField<DAS_BIND_MANAGED_FIELD(value)>("value");
     }
     virtual bool isLocal() const override { return true; }
     virtual bool canCopy() const override { return true; }
@@ -8423,6 +8426,7 @@ struct VkPerformanceValueINTELAnnotation
     VkPerformanceValueINTELAnnotation(ModuleLibrary & ml)
     : ManagedStructureAnnotation ("VkPerformanceValueINTEL", ml) {
         addField<DAS_BIND_MANAGED_FIELD(type)>("type");
+        addField<DAS_BIND_MANAGED_FIELD(data)>("data");
     }
     virtual bool isLocal() const override { return true; }
     virtual bool canCopy() const override { return true; }
@@ -9222,6 +9226,7 @@ struct VkSamplerCustomBorderColorCreateInfoEXTAnnotation
     VkSamplerCustomBorderColorCreateInfoEXTAnnotation(ModuleLibrary & ml)
     : ManagedStructureAnnotation ("VkSamplerCustomBorderColorCreateInfoEXT", ml) {
         addField<DAS_BIND_MANAGED_FIELD(sType)>("sType");
+        addField<DAS_BIND_MANAGED_FIELD(customBorderColor)>("customBorderColor");
         addField<DAS_BIND_MANAGED_FIELD(format)>("format");
     }
     virtual bool isLocal() const override { return true; }
