@@ -16,7 +16,7 @@ FIND_FLEX_AND_BISON()
 
 SETUP_COMPILER()
 
-FILE(GLOB DAS_MODULES "modules/*" RELATIVE "./modules")
+FILE(GLOB DAS_MODULES RELATIVE "./modules" "modules/*")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
