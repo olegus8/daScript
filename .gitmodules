@@ -4,3 +4,6 @@
 [submodule "modules/dasGenForEach"]
 	path = modules/dasGenForEach
 	url = git@github.com:olegus8/dasGenForEach.git
+[submodule "modules/dasVulkan"]
+	path = modules/dasVulkan
+	url = git@github.com:olegus8/dasVulkan.git
