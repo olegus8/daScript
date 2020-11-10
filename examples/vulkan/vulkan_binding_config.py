@@ -33,10 +33,8 @@ class Config(ConfigBase):
 
             #TODO: bind unions as structs
             # the following are unions:
-            'VkClearColorValue',
-            'VkClearValue',
-            'VkPerformanceValueDataINTEL',
-            'VkPipelineExecutableStatisticValueKHR',
+            #'VkPerformanceValueDataINTEL',
+            #'VkPipelineExecutableStatisticValueKHR',
         ]:
             if kw in field.type:
                 field.ignore()

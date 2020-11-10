@@ -4181,6 +4181,16 @@ struct VkBufferImageCopyAnnotation
     virtual bool canCopy() const override { return true; }
     virtual bool canMove() const override { return true; }
 };
+MAKE_TYPE_FACTORY(VkClearColorValue, VkClearColorValue);
+struct VkClearColorValueAnnotation
+: public ManagedStructureAnnotation<VkClearColorValue,true,true> {
+    VkClearColorValueAnnotation(ModuleLibrary & ml)
+    : ManagedStructureAnnotation ("VkClearColorValue", ml) {
+    }
+    virtual bool isLocal() const override { return true; }
+    virtual bool canCopy() const override { return true; }
+    virtual bool canMove() const override { return true; }
+};
 MAKE_TYPE_FACTORY(VkClearDepthStencilValue, VkClearDepthStencilValue);
 struct VkClearDepthStencilValueAnnotation
 : public ManagedStructureAnnotation<VkClearDepthStencilValue,true,true> {
@@ -4188,6 +4198,17 @@ struct VkClearDepthStencilValueAnnotation
     : ManagedStructureAnnotation ("VkClearDepthStencilValue", ml) {
         addField<DAS_BIND_MANAGED_FIELD(depth)>("depth");
         addField<DAS_BIND_MANAGED_FIELD(stencil)>("stencil");
+    }
+    virtual bool isLocal() const override { return true; }
+    virtual bool canCopy() const override { return true; }
+    virtual bool canMove() const override { return true; }
+};
+MAKE_TYPE_FACTORY(VkClearValue, VkClearValue);
+struct VkClearValueAnnotation
+: public ManagedStructureAnnotation<VkClearValue,true,true> {
+    VkClearValueAnnotation(ModuleLibrary & ml)
+    : ManagedStructureAnnotation ("VkClearValue", ml) {
+        addField<DAS_BIND_MANAGED_FIELD(depthStencil)>("depthStencil");
     }
     virtual bool isLocal() const override { return true; }
     virtual bool canCopy() const override { return true; }
@@ -6428,6 +6449,21 @@ struct VkQueryPoolPerformanceCreateInfoKHRAnnotation
     virtual bool canCopy() const override { return true; }
     virtual bool canMove() const override { return true; }
 };
+MAKE_TYPE_FACTORY(VkPerformanceCounterResultKHR, VkPerformanceCounterResultKHR);
+struct VkPerformanceCounterResultKHRAnnotation
+: public ManagedStructureAnnotation<VkPerformanceCounterResultKHR,true,true> {
+    VkPerformanceCounterResultKHRAnnotation(ModuleLibrary & ml)
+    : ManagedStructureAnnotation ("VkPerformanceCounterResultKHR", ml) {
+        addField<DAS_BIND_MANAGED_FIELD(int32)>("int32");
+        addField<DAS_BIND_MANAGED_FIELD(int64)>("int64");
+        addField<DAS_BIND_MANAGED_FIELD(uint32)>("uint32");
+        addField<DAS_BIND_MANAGED_FIELD(float32)>("float32");
+        addField<DAS_BIND_MANAGED_FIELD(float64)>("float64");
+    }
+    virtual bool isLocal() const override { return true; }
+    virtual bool canCopy() const override { return true; }
+    virtual bool canMove() const override { return true; }
+};
 MAKE_TYPE_FACTORY(VkAcquireProfilingLockInfoKHR, VkAcquireProfilingLockInfoKHR);
 struct VkAcquireProfilingLockInfoKHRAnnotation
 : public ManagedStructureAnnotation<VkAcquireProfilingLockInfoKHR,true,true> {
@@ -6615,6 +6651,19 @@ struct VkPipelineExecutableInfoKHRAnnotation
     : ManagedStructureAnnotation ("VkPipelineExecutableInfoKHR", ml) {
         addField<DAS_BIND_MANAGED_FIELD(sType)>("sType");
         addField<DAS_BIND_MANAGED_FIELD(executableIndex)>("executableIndex");
+    }
+    virtual bool isLocal() const override { return true; }
+    virtual bool canCopy() const override { return true; }
+    virtual bool canMove() const override { return true; }
+};
+MAKE_TYPE_FACTORY(VkPipelineExecutableStatisticValueKHR, VkPipelineExecutableStatisticValueKHR);
+struct VkPipelineExecutableStatisticValueKHRAnnotation
+: public ManagedStructureAnnotation<VkPipelineExecutableStatisticValueKHR,true,true> {
+    VkPipelineExecutableStatisticValueKHRAnnotation(ModuleLibrary & ml)
+    : ManagedStructureAnnotation ("VkPipelineExecutableStatisticValueKHR", ml) {
+        addField<DAS_BIND_MANAGED_FIELD(b32)>("b32");
+        addField<DAS_BIND_MANAGED_FIELD(i64)>("i64");
+        addField<DAS_BIND_MANAGED_FIELD(f64)>("f64");
     }
     virtual bool isLocal() const override { return true; }
     virtual bool canCopy() const override { return true; }
@@ -8355,6 +8404,19 @@ struct VkPhysicalDeviceShaderIntegerFunctions2FeaturesINTELAnnotation
     virtual bool canCopy() const override { return true; }
     virtual bool canMove() const override { return true; }
 };
+MAKE_TYPE_FACTORY(VkPerformanceValueDataINTEL, VkPerformanceValueDataINTEL);
+struct VkPerformanceValueDataINTELAnnotation
+: public ManagedStructureAnnotation<VkPerformanceValueDataINTEL,true,true> {
+    VkPerformanceValueDataINTELAnnotation(ModuleLibrary & ml)
+    : ManagedStructureAnnotation ("VkPerformanceValueDataINTEL", ml) {
+        addField<DAS_BIND_MANAGED_FIELD(value32)>("value32");
+        addField<DAS_BIND_MANAGED_FIELD(valueFloat)>("valueFloat");
+        addField<DAS_BIND_MANAGED_FIELD(valueBool)>("valueBool");
+    }
+    virtual bool isLocal() const override { return true; }
+    virtual bool canCopy() const override { return true; }
+    virtual bool canMove() const override { return true; }
+};
 MAKE_TYPE_FACTORY(VkPerformanceValueINTEL, VkPerformanceValueINTEL);
 struct VkPerformanceValueINTELAnnotation
 : public ManagedStructureAnnotation<VkPerformanceValueINTEL,true,true> {
@@ -9586,7 +9648,9 @@ public:
         addAnnotation(make_smart<VkBufferCopyAnnotation>(lib));
         addAnnotation(make_smart<VkImageSubresourceLayersAnnotation>(lib));
         addAnnotation(make_smart<VkBufferImageCopyAnnotation>(lib));
+        addAnnotation(make_smart<VkClearColorValueAnnotation>(lib));
         addAnnotation(make_smart<VkClearDepthStencilValueAnnotation>(lib));
+        addAnnotation(make_smart<VkClearValueAnnotation>(lib));
         addAnnotation(make_smart<VkClearAttachmentAnnotation>(lib));
         addAnnotation(make_smart<VkClearRectAnnotation>(lib));
         addAnnotation(make_smart<VkImageBlitAnnotation>(lib));
@@ -9747,6 +9811,7 @@ public:
         addAnnotation(make_smart<VkPerformanceCounterKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPerformanceCounterDescriptionKHRAnnotation>(lib));
         addAnnotation(make_smart<VkQueryPoolPerformanceCreateInfoKHRAnnotation>(lib));
+        addAnnotation(make_smart<VkPerformanceCounterResultKHRAnnotation>(lib));
         addAnnotation(make_smart<VkAcquireProfilingLockInfoKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPerformanceQuerySubmitInfoKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPhysicalDeviceSurfaceInfo2KHRAnnotation>(lib));
@@ -9763,6 +9828,7 @@ public:
         addAnnotation(make_smart<VkPipelineInfoKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPipelineExecutablePropertiesKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPipelineExecutableInfoKHRAnnotation>(lib));
+        addAnnotation(make_smart<VkPipelineExecutableStatisticValueKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPipelineExecutableStatisticKHRAnnotation>(lib));
         addAnnotation(make_smart<VkPipelineExecutableInternalRepresentationKHRAnnotation>(lib));
         addAnnotation(make_smart<VkDebugReportCallbackCreateInfoEXTAnnotation>(lib));
@@ -9897,6 +9963,7 @@ public:
         addAnnotation(make_smart<VkQueueFamilyCheckpointPropertiesNVAnnotation>(lib));
         addAnnotation(make_smart<VkCheckpointDataNVAnnotation>(lib));
         addAnnotation(make_smart<VkPhysicalDeviceShaderIntegerFunctions2FeaturesINTELAnnotation>(lib));
+        addAnnotation(make_smart<VkPerformanceValueDataINTELAnnotation>(lib));
         addAnnotation(make_smart<VkPerformanceValueINTELAnnotation>(lib));
         addAnnotation(make_smart<VkInitializePerformanceApiInfoINTELAnnotation>(lib));
         addAnnotation(make_smart<VkQueryPoolPerformanceQueryCreateInfoINTELAnnotation>(lib));
