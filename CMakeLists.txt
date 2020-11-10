@@ -13,20 +13,14 @@ set(EXECUTABLE_OUTPUT_PATH  ${PROJECT_SOURCE_DIR}/bin/)
 
 FIND_XXD()
 FIND_FLEX_AND_BISON()
-FIND_PYTHON3()
 FIND_VULKAN()
 
 SETUP_COMPILER()
 
 FILE(GLOB DAS_MODULES "modules/*" RELATIVE "./modules")
 FOREACH(module ${DAS_MODULES})
-    INCLUDE(modules/${module}/CMakeCommon.txt OPTIONAL)
-ENDFOREACH()
-FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
-
-SETUP_UTILS()
 
 FLEX(src/parser/ds_lexer.lpp)
 BISON(src/parser/ds_parser.ypp)
@@ -308,7 +302,9 @@ ADD_LIBRARY(libDaScript ${VECMATH_SRC} ${AST_SRC} ${BUILTIN_SRC} ${MISC_SRC} ${S
 	${DAGOR_NOISE_SRC} ${FLAT_HASH_MAP_SRC} ${DAS_LIB_SRC})
 SETUP_CPP11(libDaScript)
 
-DAS_GEN_FOR_EACH(include/daScript/simulate/for_each.h ${MAX_DAS_FOR_EACH_ARGS})
+IF(DAS_GEN_FOR_EACH_FOUND)
+    DAS_GEN_FOR_EACH(include/daScript/simulate/for_each.h ${MAX_DAS_FOR_EACH_ARGS})
+ENDIF()
 
 # AOT compiler
 
@@ -549,23 +545,6 @@ TARGET_INCLUDE_DIRECTORIES(daScriptTest PUBLIC examples/test)
 SETUP_CPP11(daScriptTest)
 add_dependencies(daScriptTest daScriptTestAot dasAotStub)
 SETUP_LTO(daScriptTest)
-
-# dasBinder test module
-
-SET(BINDER_TEST_SRC
-examples/test/binder/main.cpp
-examples/test/binder/generated_bindings.cpp
-)
-
-add_executable(dasBinderTest ${BINDER_TEST_SRC})
-TARGET_LINK_LIBRARIES(dasBinderTest libDaScript)
-SETUP_CPP11(dasBinderTest)
-
-DAS_BINDER(
-    examples/test/binder/header_to_bind.h
-    examples/test/binder/generated_bindings.cpp
-    examples/test/binder/binding_config.py
-)
 
 # vulkan example module
 
