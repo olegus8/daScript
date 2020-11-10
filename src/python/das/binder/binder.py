@@ -285,6 +285,7 @@ class C_Struct(C_InnerNode):
         if (root['kind'] == 'RecordDecl'
             and root['tagUsed'] in ['struct', 'union']
             and 'inner' in root
+            and 'name' in root
         ):
             return C_Struct(root=root, **kwargs)
 
