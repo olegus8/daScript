@@ -20,12 +20,13 @@ class Config(ConfigBase):
             field.ignore()
         for kw in [
             #TODO: bind _T * handles as DummyType(..._T)
-            '*',
             #TODO: hints from Boris:
-            # ast_typedecl.h
+            # ast_typedecl.h -- add size_t and char there
             # options log_infer_passes = true
             # options log = true
             # ast_lint.cpp -- for options
+
+            '*',
             'unsigned long',
 
             # the following are unions:
