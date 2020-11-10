@@ -298,13 +298,6 @@ class C_Struct(C_InnerNode):
                 if not field.is_ignored:
                     yield field
 
-    def depends_on(self, types):
-        for type_ in types:
-            for field in self.fields:
-                if type_ in field.type:
-                    return True
-        return False
-
     def generate_decl(self):
         is_local = to_cpp_bool(self.__is_local)
         can_copy = to_cpp_bool(self.__can_copy)
