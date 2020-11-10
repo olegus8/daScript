@@ -280,7 +280,7 @@ class C_Struct(C_InnerNode):
     @staticmethod
     def maybe_create(root, **kwargs):
         if (root['kind'] == 'RecordDecl'
-            and root['tagUsed'] == 'struct'
+            and root['tagUsed'] in ['struct', 'union']
             and 'inner' in root
         ):
             return C_Struct(root=root, **kwargs)
