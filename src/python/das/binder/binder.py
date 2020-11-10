@@ -5,6 +5,7 @@ import sys
 from os import path
 from das.shared.object_base import LoggingObject
 from das.shared.op_sys import full_path, run_exec, write_to_file
+from das.shared.diag import log_on_exception
 
 
 APP_NAME = 'dasBinder'
@@ -167,7 +168,7 @@ class Binder(LoggingObject):
         return lines
 
 
-class C_TranslationUnit(object):
+class C_TranslationUnit(LoggingObject):
 
     def __init__(self, c_src_fpath, clang_c_exe, include_dirs, config):
         cmd = []
@@ -181,11 +182,13 @@ class C_TranslationUnit(object):
 
     def __get_nodes(self, node_class, configure_fn):
         for inner in self.__root['inner']:
-            node = node_class.maybe_create(root=inner, config=self.__config)
-            if node is None or node.is_builtin:
-                continue
-            configure_fn(node)
-            yield node
+            with log_on_exception(inner=inner):
+                node = node_class.maybe_create(
+                    root=inner, config=self.__config)
+                if node is None or node.is_builtin:
+                    continue
+                configure_fn(node)
+                yield node
 
     @property
     def enums(self):
