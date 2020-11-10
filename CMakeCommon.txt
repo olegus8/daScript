@@ -97,9 +97,6 @@ MACRO(FIND_FLEX_AND_BISON)
 	find_package(FLEX)
 ENDMACRO(FIND_FLEX_AND_BISON)
 
-MACRO(FIND_VULKAN)
-ENDMACRO(FIND_VULKAN)
-
 MACRO(XXD input)
 	IF(NOT XXD_BIN)
 		MESSAGE(STATUS "XXD not found, pre-generated files will be used." )
