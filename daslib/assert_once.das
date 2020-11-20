@@ -1,7 +1,7 @@
 options indenting = 4
 options no_aot = true
 
-module assert_boost
+module assert_once
 
 require ast
 require rtti
@@ -35,6 +35,4 @@ class AssertOnceMacro : AstFunctionAnnotation
         rules |> replaceVariable("message") <| clone_expression(call.arguments[1])
         apply_template(rules, call.at, qblock)
         delete rules
-        var res <- unquote_block(qblock)
-        qblock := null
-        return res
+        return move_unquote_block(qblock)

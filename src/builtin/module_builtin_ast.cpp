@@ -6,6 +6,7 @@
 #include "daScript/ast/ast_policy_types.h"
 #include "daScript/ast/ast_expressions.h"
 #include "daScript/ast/ast_generate.h"
+#include "daScript/ast/ast_visitor.h"
 #include "daScript/simulate/aot_builtin_ast.h"
 #include "daScript/simulate/aot_builtin_string.h"
 #include "daScript/misc/performance_time.h"
@@ -34,6 +35,7 @@ MAKE_TYPE_FACTORY(ReaderMacro,ReaderMacro)
 MAKE_TYPE_FACTORY(CallMacro,CallMacro)
 MAKE_TYPE_FACTORY(ModuleGroup,ModuleGroup)
 MAKE_TYPE_FACTORY(ModuleLibrary,ModuleLibrary)
+MAKE_TYPE_FACTORY(AstContext,AstContext)
 
 MAKE_TYPE_FACTORY(ExprBlock,ExprBlock)
 MAKE_TYPE_FACTORY(ExprLet,ExprLet)
@@ -239,6 +241,7 @@ namespace das {
         AstExprLetAnnotation(ModuleLibrary & ml)
             :  AstExpressionAnnotation<ExprLet> ("ExprLet", ml) {
             addField<DAS_BIND_MANAGED_FIELD(variables)>("variables");
+            addField<DAS_BIND_MANAGED_FIELD(atInit)>("atInit");
         }
     };
 
@@ -679,7 +682,7 @@ namespace das {
     TypeDeclPtr makeExprVarFlags() {
         auto ft = make_smart<TypeDecl>(Type::tBitfield);
         ft->alias = "ExprVarFlags";
-        ft->argNames = { "local", "argument", "block",
+        ft->argNames = { "local", "argument", "_block",
             "thisBlock", "r2v", "r2cr", "write" };
         return ft;
     }
@@ -898,7 +901,27 @@ namespace das {
         }
     };
 
-     // TYPE STUFF
+    // CONTEXT
+    struct AstContextAnnotation : ManagedStructureAnnotation<AstContext,false> {
+        AstContextAnnotation(ModuleLibrary & ml)
+            :  ManagedStructureAnnotation ("AstContext", ml) {
+            addField<DAS_BIND_MANAGED_FIELD(func)>("func");
+            addField<DAS_BIND_MANAGED_FIELD(loop)>("loops");
+            addField<DAS_BIND_MANAGED_FIELD(blocks)>("blocks");
+            addField<DAS_BIND_MANAGED_FIELD(scopes)>("scopes");
+            addField<DAS_BIND_MANAGED_FIELD(with)>("withs");
+        }
+    };
+
+    void getAstContext ( smart_ptr_raw<Program> prog, smart_ptr_raw<Expression> expr, const TBlock<void,bool,AstContext> & block, Context * context ) {
+        AstContext astc = generateAstContext(prog,expr.get());
+        __m128 args[2];
+        args[0] = cast<bool>::from ( astc.valid );
+        args[1] = astc.valid ? cast<AstContext&>::from(astc) : v_zero();
+        context->invoke(block, args, nullptr );
+    }
+
+    // TYPE STUFF
 
     struct AstModuleLibraryAnnotation : ManagedStructureAnnotation<ModuleLibrary,false> {
         AstModuleLibraryAnnotation(ModuleLibrary & ml)
@@ -975,10 +998,15 @@ namespace das {
             addProperty<DAS_BIND_MANAGED_PROP(isAuto)>("isAuto","isAuto");
             addProperty<DAS_BIND_MANAGED_PROP(isAlias)>("isAlias","isAlias");
             addProperty<DAS_BIND_MANAGED_PROP(isWorkhorseType)>("isWorkhorseType","isWorkhorseType");
+            addProperty<DAS_BIND_MANAGED_PROP(isStructure)>("isStructure","isStructure");
+            addProperty<DAS_BIND_MANAGED_PROP(isTuple)>("isTuple","isTuple");
+            addProperty<DAS_BIND_MANAGED_PROP(isVariant)>("isVariant","isVariant");
+            addProperty<DAS_BIND_MANAGED_PROP(isHandle)>("isHandle","isHandle");
             addProperty<DAS_BIND_MANAGED_PROP(isCtorType)>("isCtorType","isCtorType");
             addProperty<DAS_BIND_MANAGED_PROP(isExprType)>("isExprType","isExprType");
             addProperty<DAS_BIND_MANAGED_PROP(isClass)>("isClass","isClass");
             addProperty<DAS_BIND_MANAGED_PROP(isFunction)>("isFunction","isFunction");
+            addProperty<DAS_BIND_MANAGED_PROP(isPointer)>("isPointer","isPointer");
             addProperty<DAS_BIND_MANAGED_PROP(isRefType)>("isRefType","isRefType");
             addProperty<DAS_BIND_MANAGED_PROP(getSizeOf)>("sizeOf","getSizeOf");
             addProperty<DAS_BIND_MANAGED_PROP(getBaseSizeOf)>("baseSizeOf","getBaseSizeOf");
@@ -2001,7 +2029,8 @@ namespace das {
         return make_smart<ReaderMacroAdapter>(name,(char *)pClass,info,context);
     }
 
-    void addModuleReaderMacro ( Module * module, ReaderMacroPtr newM, Context * context ) {
+    void addModuleReaderMacro ( Module * module, ReaderMacroPtr & _newM, Context * context ) {
+        ReaderMacroPtr newM = move(_newM);
         if ( !module->addReaderMacro(newM, true) ) {
             context->throw_error_ex("can't add reader macro %s to module %s", newM->name.c_str(), module->name.c_str());
         }
@@ -2011,7 +2040,8 @@ namespace das {
         return make_smart<CallMacroAdapter>(name,(char *)pClass,info,context);
     }
 
-    void addModuleCallMacro ( Module * module, CallMacroPtr newM, Context * context ) {
+    void addModuleCallMacro ( Module * module, CallMacroPtr & _newM, Context * context ) {
+        CallMacroPtr newM = move(_newM);
         if ( ! module->addCallMacro(newM->name, [=](const LineInfo & at) -> ExprLooksLikeCall * {
             auto ecm = new ExprCallMacro(at, newM->name);
             ecm->macro = newM.get();
@@ -2033,11 +2063,13 @@ namespace das {
         return make_smart<VariantMacroAdapter>(name,(char *)pClass,info,context);
     }
 
-    void addModuleVariantMacro ( Module * module, VariantMacroPtr newM, Context * ) {
+    void addModuleVariantMacro ( Module * module, VariantMacroPtr & _newM, Context * ) {
+        VariantMacroPtr newM = move(_newM);
         module->variantMacros.push_back(newM);
     }
 
-    void addModuleInferDirtyMacro ( Module * module, PassMacroPtr newM, Context * ) {
+    void addModuleInferDirtyMacro ( Module * module, PassMacroPtr & _newM, Context * ) {
+        PassMacroPtr newM = move(_newM);
         module->inferMacros.push_back(newM);
     }
 
@@ -2045,14 +2077,16 @@ namespace das {
         return make_smart<StructureAnnotationAdapter>(name,(char *)pClass,info,context);
     }
 
-    void addModuleStructureAnnotation ( Module * module, StructureAnnotationPtr ann, Context * context ) {
+    void addModuleStructureAnnotation ( Module * module, StructureAnnotationPtr & _ann, Context * context ) {
+        StructureAnnotationPtr ann = move(_ann);
         if ( !module->addAnnotation(ann, true) ) {
             context->throw_error_ex("can't add structure annotation %s to module %s",
                 ann->name.c_str(), module->name.c_str());
         }
     }
 
-    void addStructureStructureAnnotation ( smart_ptr_raw<Structure> st, StructureAnnotationPtr ann, Context * context ) {
+    void addStructureStructureAnnotation ( smart_ptr_raw<Structure> st, StructureAnnotationPtr & _ann, Context * context ) {
+        StructureAnnotationPtr ann = move(_ann);
         string err;
         ModuleGroup dummy;
         if ( !ann->touch(st, dummy, AnnotationArgumentList(), err) ) {
@@ -2110,22 +2144,26 @@ namespace das {
         return make_smart<FunctionAnnotationAdapter>(name,(char *)pClass,info,context);
     }
 
-    bool addModuleFunction ( Module * module, FunctionPtr func, Context * ) {
+    bool addModuleFunction ( Module * module, FunctionPtr & _func, Context * ) {
+        FunctionPtr func = move(_func);
         return module->addFunction(func, true);
     }
 
-    bool addModuleVariable ( Module * module, VariablePtr var, Context * ) {
-        return module->addVariable(var, false);
+    bool addModuleVariable ( Module * module, VariablePtr & _var, Context * ) {
+        VariablePtr var = move(_var);
+        return module->addVariable(move(var), false);
     }
 
-    void addModuleFunctionAnnotation ( Module * module, FunctionAnnotationPtr ann, Context * context ) {
+    void addModuleFunctionAnnotation ( Module * module, FunctionAnnotationPtr & _ann, Context * context ) {
+        FunctionAnnotationPtr ann = move(_ann);
         if ( !module->addAnnotation(ann, true) ) {
             context->throw_error_ex("can't add function annotation %s to module %s",
                 ann->name.c_str(), module->name.c_str());
         }
     }
 
-    void addFunctionFunctionAnnotation ( smart_ptr_raw<Function> func, FunctionAnnotationPtr ann, Context * context ) {
+    void addFunctionFunctionAnnotation ( smart_ptr_raw<Function> func, FunctionAnnotationPtr & _ann, Context * context ) {
+        FunctionAnnotationPtr ann = move(_ann);
         string err;
         ModuleGroup dummy;
         if ( !ann->apply(func, dummy, AnnotationArgumentList(), err) ) {
@@ -2494,8 +2532,8 @@ namespace das {
             addExpressionAnnotation(make_smart<AstExprUnsafeAnnotation>(lib))->from("Expression");
             addExpressionAnnotation(make_smart<AstExprCallMacroAnnotation>(lib))->from("ExprLooksLikeCall");
             // vector functions for custom containers
-            addExtern<DAS_BIND_FUN(mks_vector_push)>(*this, lib, "push",
-                SideEffects::modifyArgument, "mks_vector_push")->generated = true;
+            addExtern<DAS_BIND_FUN(mks_vector_emplace)>(*this, lib, "emplace",
+                SideEffects::modifyArgument, "mks_vector_emplace")->generated = true;
             addExtern<DAS_BIND_FUN(mks_vector_pop)>(*this, lib, "pop",
                 SideEffects::modifyArgument, "mks_vector_pop")->generated = true;
             addExtern<DAS_BIND_FUN(mks_vector_clear)>(*this, lib, "clear",
@@ -2620,6 +2658,10 @@ namespace das {
                 SideEffects::modifyExternal, "for_each_global");
             addExtern<DAS_BIND_FUN(builtin_structure_for_each_field)>(*this, lib,  "for_each_field",
                 SideEffects::modifyExternal, "builtin_structure_for_each_field");
+            // context
+            addAnnotation(make_smart<AstContextAnnotation>(lib));
+            addExtern<DAS_BIND_FUN(getAstContext)>(*this, lib,  "get_ast_context",
+                SideEffects::modifyExternal, "get_ast_context");
             // errors
             addExtern<DAS_BIND_FUN(ast_error)>(*this, lib,  "macro_error",
                 SideEffects::modifyArgumentAndExternal, "ast_error");

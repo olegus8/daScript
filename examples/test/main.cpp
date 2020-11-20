@@ -355,12 +355,15 @@ int main( int argc, char * argv[] ) {
     // #define TEST_NAME   "/examples/test/hello_world.das"
     // #define TEST_NAME   "/examples/test/json_example.das"
     // #define TEST_NAME   "/examples/test/ast_print.das"
+    // #define TEST_NAME   "/examples/test/apply_example.das"
     // #define TEST_NAME   "/examples/test/unit_tests/hint_macros_example.das"
     // #define TEST_NAME   "/examples/test/unit_tests/aonce.das"
     unit_test(getDasRoot() +  TEST_NAME,false);
     // unit_test(getDasRoot() +  TEST_NAME,true);
     Module::Shutdown();
-    // dumpTrackingLeaks();
+#if DAS_ENABLE_SMART_PTR_TRACKING
+    dumpTrackingLeaks();
+#endif
     getchar();
     return 0;
 #endif

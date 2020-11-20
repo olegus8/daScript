@@ -67,6 +67,7 @@ SOURCE_GROUP_FILES("vecmath" VECMATH_SRC)
 
 SET(AST_SRC
 src/ast/ast.cpp
+src/ast/ast_visitor.cpp
 src/ast/ast_generate.cpp
 src/ast/ast_simulate.cpp
 src/ast/ast_typedecl.cpp
@@ -367,6 +368,7 @@ DAS_AOT("daslib/strings_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/rst.das" AOT_GENERATED_SRC dasAotStub  dasAot)
 DAS_AOT("daslib/cpp_bind.das" AOT_GENERATED_SRC dasAotStub  dasAot)
 DAS_AOT("daslib/template_boost.das" AOT_GENERATED_SRC dasAotStub  dasAot)
+DAS_AOT("daslib/is_local.das" AOT_GENERATED_SRC dasAotStub  dasAot)
 SOURCE_GROUP_FILES("aot stub" AOT_GENERATED_SRC)
 
 # libUriParser
