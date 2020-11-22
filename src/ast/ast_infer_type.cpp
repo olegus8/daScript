@@ -1818,8 +1818,10 @@ namespace das {
                     expr->at, CompilationError::cant_dereference);
             } else {
                 if ( !safeExpression(expr) ) {
-                    error("address of reference requires unsafe",  "", "",
-                        expr->at, CompilationError::unsafe);
+                    if ( !expr->subexpr->type->temporary ) { // address of temp type is temp, but its safe
+                        error("address of reference requires unsafe",  "", "",
+                            expr->at, CompilationError::unsafe);
+                    }
                 }
                 expr->type = make_smart<TypeDecl>(Type::tPointer);
                 expr->type->firstType = make_smart<TypeDecl>(*expr->subexpr->type);
@@ -2310,12 +2312,12 @@ namespace das {
                 auto & passType = expr->arguments[i+1]->type;
                 auto & argType = blockT->argTypes[i];
                 // same type only
-                if ( !argType->isSameType(*passType, RefMatters::no, ConstMatters::no, TemporaryMatters::yes) ) {
+                if ( !argType->implicit && !argType->isSameType(*passType, RefMatters::no, ConstMatters::no, TemporaryMatters::yes) ) {
                     error("incomaptible argument " + to_string(i+1) + " " + passType->describe() + " vs "
-                          + argType->describe(),  "", "",
+                          + argType->describe() + ", temporary matters",  "", "",
                         expr->at, CompilationError::invalid_argument_type);
                 }
-                // can't pass non-ref to reff
+                // can't pass non-ref to ref
                 if ( argType->isRef() && !passType->isRef() ) {
                     error("incomaptible argument. can't pass non-ref to ref " + to_string(i+1) + " "
                         + passType->describe() + " vs " + argType->describe(), "", "",
