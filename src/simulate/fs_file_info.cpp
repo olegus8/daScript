@@ -70,8 +70,9 @@ namespace das {
                 return info;
             }
             if (top == "modules" ) {
+                auto last_pos = req.find_last_of("./");
                 ModuleInfo info;
-                info.moduleName = req.substr(np+1);
+                info.moduleName = req.substr(last_pos+1);
                 info.fileName = daslibPath + "/../" + req + ".das";
                 return info;
             }
