@@ -21,6 +21,7 @@ FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
+MESSAGE(STATUS "das modules libs: ${DAS_MODULES_LIBS}")
 
 FLEX(src/parser/ds_lexer.lpp)
 BISON(src/parser/ds_parser.ypp)
