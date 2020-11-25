@@ -72,7 +72,7 @@ namespace das {
             if (top == "modules" ) {
                 ModuleInfo info;
                 info.moduleName = req.substr(np+1);
-                info.fileName = daslibPath + "/../" + info.moduleName + ".das";
+                info.fileName = daslibPath + "/../" + req + ".das";
                 return info;
             }
         }
