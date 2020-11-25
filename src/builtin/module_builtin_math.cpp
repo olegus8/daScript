@@ -72,7 +72,6 @@ namespace das {
     MATH_FUN_OP2A(Min)
     MATH_FUN_OP2A(Max)
     MATH_FUN_OP3A(Clamp)
-    MATH_FUN_OP3A(Mad)
 
     //common
     MATH_FUN_OP1(Abs)
@@ -82,6 +81,7 @@ namespace das {
     MATH_FUN_OP1(RSqrt)
     MATH_FUN_OP1(RSqrtEst)
     MATH_FUN_OP1(Sat)
+    MATH_FUN_OP3(Mad)
     MATH_FUN_OP3(Lerp)
 
     MATH_FUN_OP1_INT(Trunci)
@@ -133,7 +133,6 @@ namespace das {
         mod.addFunction( make_smart<BuiltInFn<Sim_Min <TT>, TT,   TT,   TT>      >("min",   lib, "Min")->args({"x","y"}) );
         mod.addFunction( make_smart<BuiltInFn<Sim_Max <TT>, TT,   TT,   TT>      >("max",   lib, "Max")->args({"x","y"}) );
         mod.addFunction( make_smart<BuiltInFn<Sim_Clamp<TT>,TT,   TT,   TT,  TT> >("clamp", lib, "Clamp")->args({"t","a","b"}) );
-        mod.addFunction( make_smart<BuiltInFn<Sim_Mad<TT>,  TT,   TT,   TT,  TT> >("mad",   lib, "Mad")->args({"a","b","c"}) );
     }
 
     template <typename TT>
@@ -171,6 +170,7 @@ namespace das {
     template <typename TT>
     void addFunctionOp3(Module & mod, const ModuleLibrary & lib) {
         //                                     policy         ret arg1 arg2 arg3   name
+        mod.addFunction( make_smart<BuiltInFn<Sim_Mad<TT>,   TT, TT,  TT,  TT> >("mad",   lib, "Mad")->args({"a","b","c"}) );
         mod.addFunction( make_smart<BuiltInFn<Sim_Lerp<TT>,  TT, TT,  TT,  TT> >("lerp",  lib, "Lerp")->args({"a","b","t"}) );
     }
 
