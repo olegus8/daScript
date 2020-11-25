@@ -145,7 +145,7 @@ namespace  das {
         static __forceinline vec4f Sat   ( vec4f a, Context & ) {
             return v_cast_vec4f(v_mini(v_maxi(v_cast_vec4i(a),v_cast_vec4i(v_zero())),v_splatsi(1)));
         }
-        static __forceinline vec4f Clamp ( vec4f t, vec4f a, vec4f b, Context & ) { return Max(a, Min(t, b)); }
+        static __forceinline vec4f Clamp ( vec4f t, vec4f a, vec4f b, Context & ctx ) { return Max(a, Min(t, b, ctx), ctx); }
     };
 
     struct SimPolicy_MathFloat {
