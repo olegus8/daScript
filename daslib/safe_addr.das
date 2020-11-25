@@ -9,18 +9,6 @@ require daslib/ast_boost
 require daslib/is_local
 
 [tag_function(safe_addr_tag)]
-def safe_addr(var x : auto(T)& = const) : T-& ? #
-    unsafe
-        return reinterpret<T-&?#>(addr(x))
-
-
-[tag_function(safe_addr_tag)]
-def safe_addr(x : auto(T)& = const) : T-& ? const #
-    unsafe
-        return reinterpret<T-&? const #>(addr(x))
-
-
-[tag_function(safe_addr_tag)]
 def safe_addr(var x : auto(T)& = const) : T-&-# ? #
     unsafe
         return reinterpret<T-&-#?#>(addr(x))
