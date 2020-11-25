@@ -20,7 +20,7 @@ SET(DAS_MODULES_LIBS)
 FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
-    LIST(APPEND ${DAS_MODULES_LIBS} libDasModule_${module})
+    LIST(APPEND DAS_MODULES_LIBS libDasModule_${module})
 ENDFOREACH()
 
 FLEX(src/parser/ds_lexer.lpp)
