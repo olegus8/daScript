@@ -321,21 +321,24 @@ namespace das
     }
 
     SimNode * Function::makeSimNode ( Context & context, const vector<ExpressionPtr> & ) {
+#if DAS_DEBUGGER
         if ( context.thisProgram->getDebugger() ) {
             if ( copyOnReturn || moveOnReturn ) {
-                return context.code->makeNodeUnroll<SimNodeDebug_CallAndCopyOrMove>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNodeDebug_CallAndCopyOrMove>(int(arguments.size()), at);
             } else if ( fastCall ) {
-                return context.code->makeNodeUnroll<SimNodeDebug_FastCall>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNodeDebug_FastCall>(int(arguments.size()), at);
             } else {
-                return context.code->makeNodeUnroll<SimNodeDebug_Call>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNodeDebug_Call>(int(arguments.size()), at);
             }
-        } else {
+        } else
+#endif
+        {
             if ( copyOnReturn || moveOnReturn ) {
-                return context.code->makeNodeUnroll<SimNode_CallAndCopyOrMove>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNode_CallAndCopyOrMove>(int(arguments.size()), at);
             } else if ( fastCall ) {
-                return context.code->makeNodeUnroll<SimNode_FastCall>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNode_FastCall>(int(arguments.size()), at);
             } else {
-                return context.code->makeNodeUnroll<SimNode_Call>(int(arguments.size()), at);
+                return context.code->makeNodeUnrollAny<SimNode_Call>(int(arguments.size()), at);
             }
         }
     }
@@ -423,7 +426,7 @@ namespace das
             SimNode * init0;
             if ( useCMRES ) {
                 if ( bytes <= 32 ) {
-                    init0 = context.code->makeNodeUnroll<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
+                    init0 = context.code->makeNodeUnrollNZ<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
                 } else {
                     init0 = context.code->makeNode<SimNode_InitLocalCMRes>(at,extraOffset,bytes);
                 }
@@ -548,7 +551,7 @@ namespace das
             SimNode * init0;
             if ( useCMRES ) {
                 if ( bytes <= 32 ) {
-                    init0 = context.code->makeNodeUnroll<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
+                    init0 = context.code->makeNodeUnrollNZ<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
                 } else {
                     init0 = context.code->makeNode<SimNode_InitLocalCMRes>(at,extraOffset,bytes);
                 }
@@ -753,7 +756,7 @@ namespace das
             SimNode * init0;
             if ( useCMRES ) {
                 if ( bytes <= 32 ) {
-                    init0 = context.code->makeNodeUnroll<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
+                    init0 = context.code->makeNodeUnrollNZ<SimNode_InitLocalCMResN>(bytes, at,extraOffset);
                 } else {
                     init0 = context.code->makeNode<SimNode_InitLocalCMRes>(at,extraOffset,bytes);
                 }
@@ -850,7 +853,7 @@ namespace das
             SimNode * init0;
             if ( useCMRES ) {
                 if ( sizeOf <= 32 ) {
-                    init0 = context.code->makeNodeUnroll<SimNode_InitLocalCMResN>(sizeOf, at,extraOffset);
+                    init0 = context.code->makeNodeUnrollNZ<SimNode_InitLocalCMResN>(sizeOf, at,extraOffset);
                 } else {
                     init0 = context.code->makeNode<SimNode_InitLocalCMRes>(at,extraOffset,sizeOf);
                 }
@@ -1105,48 +1108,51 @@ namespace das
     SimNode * ExprInvoke::simulate (Context & context) const {
         auto blockT = arguments[0]->type;
         SimNode_CallBase * pInvoke;
+#if DAS_DEBUGGER
         if ( context.thisProgram->getDebugger() ) {
             if ( isCopyOrMove() ) {
                 auto getSp = context.code->makeNode<SimNode_GetLocal>(at,stackTop);
                 if ( blockT->baseType==Type::tBlock ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_InvokeAndCopyOrMove>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_InvokeAndCopyOrMove>(
                                                         int(arguments.size()), at, getSp);
                 } else if ( blockT->baseType==Type::tFunction ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_InvokeAndCopyOrMoveFn>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_InvokeAndCopyOrMoveFn>(
                                                         int(arguments.size()), at, getSp);
                 } else {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_InvokeAndCopyOrMoveLambda>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_InvokeAndCopyOrMoveLambda>(
                                                         int(arguments.size()), at, getSp);
                 }
             } else {
                 if ( blockT->baseType==Type::tBlock ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_Invoke>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_Invoke>(int(arguments.size()),at);
                 } else if ( blockT->baseType==Type::tFunction ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_InvokeFn>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_InvokeFn>(int(arguments.size()),at);
                 } else {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNodeDebug_InvokeLambda>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNodeDebug_InvokeLambda>(int(arguments.size()),at);
                 }
             }
-        } else {
+        } else
+#endif
+        {
             if ( isCopyOrMove() ) {
                 auto getSp = context.code->makeNode<SimNode_GetLocal>(at,stackTop);
                 if ( blockT->baseType==Type::tBlock ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_InvokeAndCopyOrMove>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_InvokeAndCopyOrMove>(
                                                         int(arguments.size()), at, getSp);
                 } else if ( blockT->baseType==Type::tFunction ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_InvokeAndCopyOrMoveFn>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_InvokeAndCopyOrMoveFn>(
                                                         int(arguments.size()), at, getSp);
                 } else {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_InvokeAndCopyOrMoveLambda>(
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_InvokeAndCopyOrMoveLambda>(
                                                         int(arguments.size()), at, getSp);
                 }
             } else {
                 if ( blockT->baseType==Type::tBlock ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_Invoke>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_Invoke>(int(arguments.size()),at);
                 } else if ( blockT->baseType==Type::tFunction ) {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_InvokeFn>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_InvokeFn>(int(arguments.size()),at);
                 } else {
-                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollNZ<SimNode_InvokeLambda>(int(arguments.size()),at);
+                    pInvoke = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_InvokeLambda>(int(arguments.size()),at);
                 }
             }
         }
@@ -1323,7 +1329,8 @@ namespace das
             }
             int32_t bytes = type->firstType->getSizeOf();
             if ( initializer ) {
-                auto pCall = (SimNode_CallBase *) context.code->makeNodeUnroll<SimNode_NewWithInitializer>(int(arguments.size()),at,bytes,persistent);
+                auto pCall = (SimNode_CallBase *) context.code->makeNodeUnrollAny<SimNode_NewWithInitializer>(
+                    int(arguments.size()),at,bytes,persistent);
                 pCall->cmresEval = nullptr;
                 newNode = ExprCall::simulateCall(func, this, context, pCall);
             } else {
@@ -1595,30 +1602,42 @@ namespace das
             if ( isClosure ) {
                 bool needResult = type!=nullptr && type->baseType!=Type::tVoid;
                 bool C0 = !needResult && simlist.size()==1 && finalList.size()==0;
+#if DAS_DEBUGGER
                 if ( context.thisProgram->getDebugger() ) {
                     block = context.code->makeNode<SimNodeDebug_ClosureBlock>(at, needResult, C0, annotationData);
-                } else {
+                } else
+#endif
+                {
                     block = context.code->makeNode<SimNode_ClosureBlock>(at, needResult, C0, annotationData);
                 }
             } else {
                 if ( maxLabelIndex!=-1 ) {
+#if DAS_DEBUGGER
                     if ( context.thisProgram->getDebugger() ) {
                         block = context.code->makeNode<SimNodeDebug_BlockWithLabels>(at);
-                    } else {
+                    } else
+#endif
+                    {
                         block = context.code->makeNode<SimNode_BlockWithLabels>(at);
                     }
                     simulateLabels(context, block, ofsmap);
                 } else {
                     if ( finalList.size()==0 ) {
+#if DAS_DEBUGGER
                         if ( context.thisProgram->getDebugger() ) {
                             block = context.code->makeNode<SimNodeDebug_BlockNF>(at);
-                        } else {
+                        } else
+#endif
+                        {
                             block = context.code->makeNode<SimNode_BlockNF>(at);
                         }
                     } else {
+#if DAS_DEBUGGER
                         if ( context.thisProgram->getDebugger() ) {
                             block = context.code->makeNode<SimNodeDebug_Block>(at);
-                        } else {
+                        } else
+#endif
+                        {
                             block = context.code->makeNode<SimNode_Block>(at);
                         }
                     }
@@ -2163,6 +2182,7 @@ namespace das
         ExpressionPtr zeroCond;
         bool condIfZero = false;
         bool match0 = matchEquNequZero(cond, zeroCond, condIfZero);
+#if DAS_DEBUGGER
         if ( context.thisProgram->getDebugger() ) {
             if ( match0 && zeroCond->type->isWorkhorseType() ) {
                 if ( condIfZero ) {
@@ -2195,7 +2215,9 @@ namespace das
                                         if_true->simulate(context));
                 }
             }
-        } else {
+        } else
+#endif
+        {
             if ( match0 && zeroCond->type->isWorkhorseType() ) {
                 if ( condIfZero ) {
                     if ( if_false ) {
@@ -2245,11 +2267,14 @@ namespace das
     }
 
     SimNode * ExprWhile::simulate (Context & context) const {
+#if DAS_DEBUGGER
         if ( context.thisProgram->getDebugger() ) {
             auto node = context.code->makeNode<SimNodeDebug_While>(at, cond->simulate(context));
             simulateFinal(context, body, node);
             return node;
-        } else {
+        } else
+#endif
+        {
             auto node = context.code->makeNode<SimNode_While>(at, cond->simulate(context));
             simulateFinal(context, body, node);
             return node;
@@ -2291,10 +2316,13 @@ namespace das
         bool hybridRange = rangeBase && (total>1);
         if ( (sourceTypes>1) || hybridRange || nativeIterators || stringChars ) {
             SimNode_ForWithIteratorBase * result;
+#if DAS_DEBUGGER
             if ( context.thisProgram->getDebugger() ) {
-                result = (SimNode_ForWithIteratorBase *) context.code->makeNodeUnroll<SimNodeDebug_ForWithIterator>(total, at);
-            } else {
-                result = (SimNode_ForWithIteratorBase *) context.code->makeNodeUnroll<SimNode_ForWithIterator>(total, at);
+                result = (SimNode_ForWithIteratorBase *) context.code->makeNodeUnrollNZ_FOR<SimNodeDebug_ForWithIterator>(total, at);
+            } else
+#endif
+            {
+                result = (SimNode_ForWithIteratorBase *) context.code->makeNodeUnrollNZ_FOR<SimNode_ForWithIterator>(total, at);
             }
             for ( int t=0; t!=total; ++t ) {
                 if ( sources[t]->type->isGoodIteratorType() ) {
@@ -2348,18 +2376,19 @@ namespace das
             assert(body->rtti_isBlock() && "there would be internal error otherwise");
             auto subB = static_pointer_cast<ExprBlock>(body);
             bool loop1 = (subB->list.size() == 1);
+#if DAS_DEBUGGER
             if ( context.thisProgram->getDebugger() ) {
                 if ( dynamicArrays ) {
                     if (loop1) {
-                        result = (SimNode_ForBase *) context.code->makeNodeUnroll<SimNodeDebug_ForGoodArray1>(total, at);
+                        result = (SimNode_ForBase *) context.code->makeNodeUnrollNZ_FOR<SimNodeDebug_ForGoodArray1>(total, at);
                     } else {
-                        result = (SimNode_ForBase *) context.code->makeNodeUnroll<SimNodeDebug_ForGoodArray>(total, at);
+                        result = (SimNode_ForBase *) context.code->makeNodeUnrollNZ_FOR<SimNodeDebug_ForGoodArray>(total, at);
                     }
                 } else if ( fixedArrays ) {
                     if (loop1) {
-                        result = (SimNode_ForBase *)context.code->makeNodeUnroll<SimNodeDebug_ForFixedArray1>(total, at);
+                        result = (SimNode_ForBase *)context.code->makeNodeUnrollNZ_FOR<SimNodeDebug_ForFixedArray1>(total, at);
                     } else {
-                        result = (SimNode_ForBase *)context.code->makeNodeUnroll<SimNodeDebug_ForFixedArray>(total, at);
+                        result = (SimNode_ForBase *)context.code->makeNodeUnrollNZ_FOR<SimNodeDebug_ForFixedArray>(total, at);
                     }
                 } else if ( rangeBase ) {
                     assert(total==1 && "simple range on 1 loop only");
@@ -2381,18 +2410,20 @@ namespace das
                     context.thisProgram->error("internal compilation error, generating for", "", "", at);
                     return nullptr;
                 }
-            } else {
+            } else
+#endif
+            {
                 if ( dynamicArrays ) {
                     if (loop1) {
-                        result = (SimNode_ForBase *) context.code->makeNodeUnroll<SimNode_ForGoodArray1>(total, at);
+                        result = (SimNode_ForBase *) context.code->makeNodeUnrollNZ_FOR<SimNode_ForGoodArray1>(total, at);
                     } else {
-                        result = (SimNode_ForBase *) context.code->makeNodeUnroll<SimNode_ForGoodArray>(total, at);
+                        result = (SimNode_ForBase *) context.code->makeNodeUnrollNZ_FOR<SimNode_ForGoodArray>(total, at);
                     }
                 } else if ( fixedArrays ) {
                     if (loop1) {
-                        result = (SimNode_ForBase *)context.code->makeNodeUnroll<SimNode_ForFixedArray1>(total, at);
+                        result = (SimNode_ForBase *)context.code->makeNodeUnrollNZ_FOR<SimNode_ForFixedArray1>(total, at);
                     } else {
-                        result = (SimNode_ForBase *)context.code->makeNodeUnroll<SimNode_ForFixedArray>(total, at);
+                        result = (SimNode_ForBase *)context.code->makeNodeUnrollNZ_FOR<SimNode_ForFixedArray>(total, at);
                     }
                 } else if ( rangeBase ) {
                     assert(total==1 && "simple range on 1 loop only");
@@ -2440,7 +2471,7 @@ namespace das
             } else if (var->aliasCMRES ) {
                 int bytes = var->type->getSizeOf();
                 if ( bytes <= 32 ) {
-                    init = context.code->makeNodeUnroll<SimNode_InitLocalCMResN>(bytes, pLet->at,0);
+                    init = context.code->makeNodeUnrollNZ<SimNode_InitLocalCMResN>(bytes, pLet->at,0);
                 } else {
                     init = context.code->makeNode<SimNode_InitLocalCMRes>(pLet->at,0,bytes);
                 }

@@ -76,7 +76,6 @@ src/ast/ast_match.cpp
 src/ast/ast_module.cpp
 src/ast/ast_print.cpp
 src/ast/ast_aot_cpp.cpp
-src/ast/ast_plot.cpp
 src/ast/ast_infer_type.cpp
 src/ast/ast_lint.cpp
 src/ast/ast_allocate_stack.cpp
@@ -358,18 +357,12 @@ ENDMACRO()
 
 add_custom_target(dasAotStub)
 SET(AOT_GENERATED_SRC)
-DAS_AOT("examples/test/aot_dummy.das" AOT_GENERATED_SRC dasAotStub dasAot)
-DAS_AOT("daslib/ast_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/functional.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/json.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/json_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/regex.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/regex_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/strings_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
-DAS_AOT("daslib/rst.das" AOT_GENERATED_SRC dasAotStub  dasAot)
-DAS_AOT("daslib/cpp_bind.das" AOT_GENERATED_SRC dasAotStub  dasAot)
-DAS_AOT("daslib/template_boost.das" AOT_GENERATED_SRC dasAotStub  dasAot)
-DAS_AOT("daslib/is_local.das" AOT_GENERATED_SRC dasAotStub  dasAot)
 SOURCE_GROUP_FILES("aot stub" AOT_GENERATED_SRC)
 
 # libUriParser
@@ -422,8 +415,8 @@ utils/dasContDev/main.cpp
 SOURCE_GROUP_FILES("main" DASCONTDEV_MAIN_SRC)
 
 add_executable(dasContDev ${DASCONTDEV_MAIN_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(dasContDev libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(dasContDev libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasContDev)
 add_dependencies(dasContDev dasAotStub)
 SETUP_LTO(dasContDev)
@@ -471,8 +464,8 @@ utils/daScript/main.cpp
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 
 add_executable(daScript ${DASCRIPT_MAIN_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(daScript libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(daScript libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(daScript)
 add_dependencies(daScript dasAotStub)
 SETUP_LTO(daScript)

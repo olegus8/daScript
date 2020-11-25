@@ -9,13 +9,13 @@ namespace das {
 namespace das { \
   template <> \
   struct typeFactory<CTYPE> { \
-      static TypeDeclPtr make(const ModuleLibrary & library ) { \
+      static __noinline TypeDeclPtr make(const ModuleLibrary & library ) { \
           return makeHandleType(library,#TYPE); \
       } \
   }; \
   template <> \
   struct typeName<CTYPE> { \
-      static string name() { return #TYPE; } \
+      constexpr static const char * name() { return #TYPE; } \
   }; \
 };
 
@@ -27,12 +27,12 @@ namespace das { \
   template <typename TT> struct typeFactory; \
   template <> \
   struct typeFactory<CTYPE> { \
-      static TypeDeclPtr make(const ModuleLibrary & library ); \
+      static __noinline TypeDeclPtr make(const ModuleLibrary & library ); \
   }; \
   template <typename TT> struct typeName; \
   template <> \
   struct typeName<CTYPE> { \
-      static string name() { return #TYPE; } \
+      constexpr static const char * name() { return #TYPE; } \
   }; \
 };
 

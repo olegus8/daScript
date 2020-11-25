@@ -165,40 +165,38 @@ namespace das {
         return ft;
     }
 
+    void init_expr ( BasicStructureAnnotation & ann ) {
+        ann.addFieldEx("at", "at", offsetof(Expression, at), makeType<LineInfo>(*ann.mlib));
+        ann.addFieldEx("_type", "type", offsetof(Expression, type), makeType<TypeDeclPtr>(*ann.mlib));
+        ann.addFieldEx("__rtti", "__rtti", offsetof(Expression, __rtti), makeType<const char *>(*ann.mlib));
+        ann.addFieldEx("genFlags", "genFlags", offsetof(Expression, genFlags), makeExprGenFlagsFlags());
+        ann.addFieldEx("flags", "flags", offsetof(Expression, flags), makeExprFlagsFlags());
+        ann.addFieldEx("printFlags", "printFlags", offsetof(Expression, printFlags), makeExprPrintFlagsFlags());
+    }
+
+    bool canSubstituteExpr ( const TypeAnnotation* thisAnn, TypeAnnotation* ann ) {
+        if (ann == thisAnn) return true;
+        if (thisAnn->module != ann->module) return false;
+        if (memcmp(ann->name.c_str(), "Expr", 4) != 0) return false;
+        auto* AEA = static_cast<BasicStructureAnnotation*>(ann);
+        for (auto p : AEA->parents) {
+            if (p == thisAnn) return true;
+        }
+        return false;
+    }
+
     template <typename EXPR>
     struct AstExprAnnotation : ManagedStructureAnnotation <EXPR> {
         const char * parentExpression = nullptr;
         AstExprAnnotation(const string & en, ModuleLibrary & ml)
             : ManagedStructureAnnotation<EXPR> (en, ml) {
         }
-        void init() {
-            using ManagedType = EXPR;
-            this->template addField<DAS_BIND_MANAGED_FIELD(at)>("at");
-            this->template addField<DAS_BIND_MANAGED_FIELD(type)>("_type","type");
-            this->template addField<DAS_BIND_MANAGED_FIELD(__rtti)>("__rtti");
-            this->addFieldEx ( "genFlags", "genFlags", offsetof(Expression, genFlags), makeExprGenFlagsFlags() );
-            this->addFieldEx ( "flags", "flags", offsetof(Expression, flags), makeExprFlagsFlags() );
-            this->addFieldEx ( "printFlags", "printFlags", offsetof(Expression, printFlags), makeExprPrintFlagsFlags() );
+        __forceinline void init() {
+            init_expr(*this);
         }
         virtual bool canSubstitute ( TypeAnnotation * ann ) const override {
-            if ( ann == this ) return true;
-            if ( this->module != ann->module ) return false;
-            if ( memcmp(ann->name.c_str(),"Expr",4)!=0 ) return false;
-            auto * AEA = static_cast<AstExprAnnotation *>(ann);
-            for ( auto p : AEA->parents ) {
-                if ( p == this ) return true;
-            }
-            return false;
+            return canSubstituteExpr(this, ann);
         }
-        void from ( const char * parentName ) {
-            auto pann = static_pointer_cast<AstExprAnnotation<EXPR>>(this->module->findAnnotation(parentName));
-            parents.reserve(pann->parents.size()+1);
-            parents.push_back(pann.get());
-            for ( auto pp : pann->parents ) {
-                parents.push_back(pp);
-            }
-        }
-        vector<TypeAnnotation *> parents;
     };
 
     template <typename EXPR>
@@ -285,14 +283,17 @@ namespace das {
         }
     };
 
+    void init_expr_looks_like_call ( BasicStructureAnnotation & ann ) {
+        ann.addFieldEx("name", "name", offsetof(ExprLooksLikeCall, name), makeType<string>(*ann.mlib));
+        ann.addFieldEx("arguments", "arguments", offsetof(ExprLooksLikeCall, arguments), makeType<vector<ExpressionPtr>>(*ann.mlib));
+        ann.addFieldEx("argumentsFailedToInfer", "argumentsFailedToInfer", offsetof(ExprLooksLikeCall, argumentsFailedToInfer), makeType<bool>(*ann.mlib));
+    }
+
     template <typename EXPR>
     struct AstExprLooksLikeCallAnnotation : AstExpressionAnnotation<EXPR> {
         AstExprLooksLikeCallAnnotation(const string & na, ModuleLibrary & ml)
             :  AstExpressionAnnotation<EXPR> (na, ml) {
-            using ManagedType = EXPR;
-            this->template addField<DAS_BIND_MANAGED_FIELD(name)>("name");
-            this->template addField<DAS_BIND_MANAGED_FIELD(arguments)>("arguments");
-            this->template addField<DAS_BIND_MANAGED_FIELD(argumentsFailedToInfer)>("argumentsFailedToInfer");
+            init_expr_looks_like_call(*this);
         }
     };
 

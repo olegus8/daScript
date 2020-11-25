@@ -30,7 +30,7 @@ namespace das
     #define DAS_ENABLE_EXCEPTIONS   0
     #endif
 
-    #define MAX_FOR_ITERATORS   32
+    #define MAX_FOR_ITERATORS   8
 
     #if DAS_ENABLE_PROFILER
         #define DAS_PROFILE_NODE    profileNode(this);
@@ -775,9 +775,9 @@ __forceinline void profileNode ( SimNode * node ) {
                 argValues[i] = arguments[i]->eval(context);
             }
         }
-        SimNode * visitOp1 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
-        SimNode * visitOp2 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
-        SimNode * visitOp3 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
+        SimNode * visitOp1 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
+        SimNode * visitOp2 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
+        SimNode * visitOp3 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
 #define EVAL_NODE(TYPE,CTYPE)\
         virtual CTYPE eval##TYPE ( Context & context ) override {   \
             return cast<CTYPE>::to(eval(context));                  \

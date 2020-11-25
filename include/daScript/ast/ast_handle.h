@@ -105,11 +105,13 @@ namespace das
         void addFieldEx(const string & na, const string & cppNa, off_t offset, TypeDeclPtr pT);
         virtual void walk(DataWalker & walker, void * data) override;
         int32_t fieldCount() const { return int32_t(fields.size()); }
+        void from(const char* parentName);
         das_map<string,StructureField> fields;
         vector<string>                 fieldsInOrder;
         DebugInfoHelper            helpA;
         StructInfo *               sti = nullptr;
         ModuleLibrary *            mlib = nullptr;
+        vector<TypeAnnotation*> parents;
     };
 
     template <typename OT>
@@ -283,11 +285,15 @@ namespace das
         struct SimNode_AtStdVector : SimNode_At {
             using TT = OT;
             DAS_PTR_NODE;
-            SimNode_AtStdVector ( const LineInfo & at, SimNode * rv, SimNode * idx, uint32_t ofs )
-                : SimNode_At(at, rv, idx, 0, ofs, 0) {}
+            SimNode_AtStdVector ( const LineInfo & at, SimNode * rv, SimNode * idx, uint32_t ofs, bool isR2V = false )
+                : SimNode_At(at, rv, idx, 0, ofs, 0), r2v(isR2V) {}
             virtual SimNode * visit ( SimVisitor & vis ) override {
                 V_BEGIN();
-                V_OP_TT(AtStdVector);
+                if ( r2v ) {
+                    V_OP_TT(AtStdVectorR2V);
+                } else {
+                    V_OP_TT(AtStdVector);
+                }
                 V_SUB_THIS(value);
                 V_SUB_THIS(index);
                 V_ARG_THIS(stride);
@@ -295,7 +301,7 @@ namespace das
                 V_ARG_THIS(range);
                 V_END();
             }
-            __forceinline char * compute ( Context & context ) {
+            __noinline char * compute ( Context & context ) {
                 DAS_PROFILE_NODE
                 auto pValue = (VectorType *) value->evalPtr(context);
                 uint32_t idx = cast<uint32_t>::to(index->eval(context));
@@ -306,31 +312,20 @@ namespace das
                     return ((char *)(pValue->data() + idx)) + offset;
                 }
             }
+            bool r2v = false;
         };
         template <typename OOT>
         struct SimNode_AtStdVectorR2V : SimNode_AtStdVector {
             using TT = OOT;
             SimNode_AtStdVectorR2V ( const LineInfo & at, SimNode * rv, SimNode * idx, uint32_t ofs )
-                : SimNode_AtStdVector(at, rv, idx, ofs) {}
-            virtual SimNode * visit ( SimVisitor & vis ) override {
-                V_BEGIN();
-                V_OP_TT(AtStdVectorR2V);
-                V_SUB_THIS(value);
-                V_SUB_THIS(index);
-                V_ARG_THIS(stride);
-                V_ARG_THIS(offset);
-                V_ARG_THIS(range);
-                V_END();
-            }
+                : SimNode_AtStdVector(at, rv, idx, ofs, true) {}
             virtual vec4f eval ( Context & context ) override {
-                DAS_PROFILE_NODE
                 OOT * pR = (OOT *) SimNode_AtStdVector::compute(context);
                 DAS_ASSERT(pR);
                 return cast<OOT>::from(*pR);
             }
 #define EVAL_NODE(TYPE,CTYPE)                                           \
             virtual CTYPE eval##TYPE ( Context & context ) override {   \
-                DAS_PROFILE_NODE \
                 return *(CTYPE *) SimNode_AtStdVector::compute(context);    \
             }
             DAS_EVAL_NODE
@@ -443,7 +438,7 @@ namespace das
     template <typename TT>
     struct typeName<vector<TT>> {
         static string name() {
-            return "dasvector`" + typeName<TT>::name();
+            return string("dasvector`") + typeName<TT>::name(); // TODO: compilation time concat
         }
     };
 
@@ -511,7 +506,7 @@ namespace das
     struct typeFactory<vector<TT>> {
         using VT = vector<TT>;
         static TypeDeclPtr make(const ModuleLibrary & library ) {
-            auto declN = typeName<VT>::name();
+            string declN = typeName<VT>::name();
             if ( library.findAnnotation(declN,nullptr).size()==0 ) {
                 auto declT = makeType<TT>(library);
                 auto ann = make_smart<ManagedVectorAnnotation<VT>>(declN,const_cast<ModuleLibrary &>(library));

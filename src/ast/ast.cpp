@@ -552,10 +552,117 @@ namespace das {
 
     // built-in function
 
-    BuiltInFunction::BuiltInFunction ( const string & fn, const string & fnCpp ) {
+    BuiltInFunction::BuiltInFunction ( const char * fn, const char * fnCpp ) {
         builtIn = true;
         name = fn;
-        cppName = fnCpp;
+        cppName = fnCpp ? fnCpp : "";
+    }
+
+    void BuiltInFunction::construct (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi != args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            if ( arg->type->isTempType() ) {
+                arg->type->implicit = true;
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( !result->ref ) {
+                DAS_FATAL_LOG("BuiltInFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        }
+    }
+
+    void BuiltInFunction::constructExternal (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi != args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( !result->ref ) {
+                DAS_FATAL_LOG("ExternalFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        }
+    }
+
+    void BuiltInFunction::constructInterop (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi!=args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( !result->ref ) {
+                DAS_FATAL_LOG("ExternalFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        }
+    }
+
+    // add extern func
+
+    void addExternFunc(Module& mod, const FunctionPtr & fnX, bool isCmres, SideEffects seFlags) {
+        if (!isCmres) {
+            if (fnX->result->isRefType() && !fnX->result->ref) {
+                DAS_FATAL_LOG(
+                    "addExtern(%s)::failed in module %s\n"
+                    "  this function should be bound with SimNode_ExtFuncCallAndCopyOrMove option\n"
+                    "  likely cast<> is implemented for the return type, and it should not\n",
+                    fnX->name.c_str(), mod.name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        }
+        fnX->setSideEffects(seFlags);
+        if (!mod.addFunction(fnX)) {
+            DAS_FATAL_LOG("addExtern(%s) failed in module %s\n", fnX->name.c_str(), mod.name.c_str());
+            DAS_FATAL_ERROR;
+        }
     }
 
     // expression

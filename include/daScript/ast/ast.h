@@ -645,7 +645,7 @@ namespace das
 
     class BuiltInFunction : public Function {
     public:
-        BuiltInFunction ( const string & fn, const string & fnCpp );
+        BuiltInFunction ( const char *fn, const char * fnCpp );
         virtual string getAotBasicName() const override {
             return cppName.empty() ? name : cppName;
         }
@@ -662,9 +662,30 @@ namespace das
             }
             return this;
         }
+    protected:
+        void construct (const vector<TypeDeclPtr> & args );
+        void constructExternal (const vector<TypeDeclPtr> & args );
+        void constructInterop (const vector<TypeDeclPtr> & args );
     public:
         string cppName;
     };
+
+    template <typename RetT, typename ...Args>
+    __noinline vector<TypeDeclPtr> makeBuiltinArgs ( const ModuleLibrary & lib ) {
+        return { makeType<RetT>(lib), makeArgumentType<Args>(lib)... };
+    }
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4100)
+#endif
+    template <typename RetT, typename ArgumentsType, size_t... I>
+    __noinline vector<TypeDeclPtr> makeArgs ( const ModuleLibrary & lib, index_sequence<I...> ) {
+        return { makeType<RetT>(lib), makeArgumentType< typename tuple_element<I, ArgumentsType>::type>(lib)... };
+    }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     struct TypeInfoMacro : public ptr_ref_count {
         TypeInfoMacro ( const string & n )
@@ -1010,7 +1031,6 @@ namespace das
         void clearSymbolUse();
         void markOrRemoveUnusedSymbols(bool forceAll = false);
         void allocateStack(TextWriter & logs);
-        string dotGraph();
         bool simulate ( Context & context, TextWriter & logs, StackAllocator * sharedStack = nullptr );
         uint64_t getInitSemanticHashWithDep( uint64_t initHash ) const;
         void linkCppAot ( Context & context, AotLibrary & aotLib, TextWriter & logs );

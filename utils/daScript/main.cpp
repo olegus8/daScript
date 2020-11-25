@@ -84,11 +84,11 @@ int main(int argc, char * argv[]) {
     NEED_MODULE(Module_Debugger);
     NEED_MODULE(Module_Network);
     NEED_MODULE(Module_UriParser);
+    NEED_MODULE(Module_FIO);
 
     //TODO: make it optional
     NEED_MODULE(Module_vulkan);
 
-    require_project_specific_modules();
     // compile and run
     for ( const auto & fn : files ) {
         compile_and_run(fn, mainName, outputProgramCode);
