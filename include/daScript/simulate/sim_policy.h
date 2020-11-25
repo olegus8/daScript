@@ -106,6 +106,8 @@ namespace  das {
         static __forceinline TT Min   ( TT a, TT b, Context & ) { return a < b ? a : b; }
         static __forceinline TT Max   ( TT a, TT b, Context & ) { return a > b ? a : b; }
         static __forceinline TT Sat   ( TT a, Context & )    { return a < 0 ? 0  : (a > 1 ? 1 : a);}
+        static __forceinline TT Mad   ( TT a, TT b, TT c, Context & ) { return a*b + c; }
+        static __forceinline TT Clamp ( TT t, TT a, TT b, Context & ) { return t>a ? (t<b ? t : b) : a; }
     };
 
     struct SimPolicy_Int : SimPolicy_Bin<int32_t>, SimPolicy_MathTT<int32_t> {};
