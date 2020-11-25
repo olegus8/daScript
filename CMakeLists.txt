@@ -16,9 +16,11 @@ FIND_FLEX_AND_BISON()
 
 SETUP_COMPILER()
 
+SET(DAS_MODULES_LIBS)
 FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
+    LIST(APPEND ${DAS_MODULES_LIBS} libDasModule_${module})
 ENDFOREACH()
 
 FLEX(src/parser/ds_lexer.lpp)
@@ -321,8 +323,8 @@ utils/dasAot/main.cpp
 SOURCE_GROUP_FILES("main" DASAOT_MAIN_SRC)
 
 add_executable(dasAot ${DASAOT_MAIN_SRC} )
-TARGET_LINK_LIBRARIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser)
-ADD_DEPENDENCIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser)
+TARGET_LINK_LIBRARIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasAot)
 SETUP_LTO(dasAot)
 
@@ -421,8 +423,8 @@ utils/dasContDev/main.cpp
 SOURCE_GROUP_FILES("main" DASCONTDEV_MAIN_SRC)
 
 add_executable(dasContDev ${DASCONTDEV_MAIN_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
-ADD_DEPENDENCIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
+TARGET_LINK_LIBRARIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(dasContDev libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasContDev)
 add_dependencies(dasContDev dasAotStub)
 SETUP_LTO(dasContDev)
@@ -470,8 +472,8 @@ utils/daScript/main.cpp
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 
 add_executable(daScript ${DASCRIPT_MAIN_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
-ADD_DEPENDENCIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
+TARGET_LINK_LIBRARIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(daScript libDaScript libPathTracerHelper libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(daScript)
 add_dependencies(daScript dasAotStub)
 SETUP_LTO(daScript)
@@ -547,8 +549,8 @@ SOURCE_GROUP_FILES("generated" TEST_GENERATED_SRC)
 
 add_executable(daScriptTest ${UNIT_TEST_SRC} ${COMPILATION_FAIL_TEST_SRC} ${MIX_TEST_SRC} ${MODULE_TEST_SRC}
     ${TEST_MAIN_SRC} ${OPTIMIZATION_SRC} ${RUNTIME_ERRORS_SRC} ${TEST_GENERATED_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
-ADD_DEPENDENCIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser)
+TARGET_LINK_LIBRARIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 TARGET_INCLUDE_DIRECTORIES(daScriptTest PUBLIC examples/test)
 SETUP_CPP11(daScriptTest)
 add_dependencies(daScriptTest daScriptTestAot dasAotStub)
@@ -640,8 +642,8 @@ utils/dasAot/main.cpp
 )
 add_executable(tutorial02_dasAot ${TUTORIAL_02_DASAOT_MAIN_SRC} )
 target_compile_definitions(tutorial02_dasAot PUBLIC MAIN_FUNC_NAME=das_aot_main)
-TARGET_LINK_LIBRARIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser)
-ADD_DEPENDENCIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser)
+TARGET_LINK_LIBRARIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(tutorial02_dasAot)
 SETUP_LTO(tutorial02_dasAot)
 
