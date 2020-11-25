@@ -69,6 +69,12 @@ namespace das {
                 info.fileName = daslibPath + "/" + info.moduleName + ".das";
                 return info;
             }
+            if (top == "modules" ) {
+                ModuleInfo info;
+                info.moduleName = req.substr(np+1);
+                info.fileName = daslibPath + "/../" + info.moduleName + ".das";
+                return info;
+            }
         }
         return FileAccess::getModuleInfo(req, from);
     }
