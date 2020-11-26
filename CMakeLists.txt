@@ -32,7 +32,7 @@ FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
     FILE(GLOB MODULE_DASLIBS RELATIVE "${PROJECT_SOURCE_DIR}/modules/${module}/daslib" "modules/${module}/daslib/*")
     FOREACH(daslib ${MODULE_DASLIBS})
-        FILE(APPEND ${DAS_MODULES_RESOLVE_INC}.output "MODULE_DASLIB(${module}, ${daslib});\n")
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC}.output "ADD_NATIVE_MODULE(\"${module}\", \"${daslib}\");\n")
     ENDFOREACH()
 ENDFOREACH()
 
