@@ -33,7 +33,7 @@ FOREACH(_module ${DAS_MODULES})
     FILE(GLOB _daslibs RELATIVE "${PROJECT_SOURCE_DIR}/modules/${_module}/daslib" "modules/${_module}/daslib/*")
     FOREACH(_daslib ${_daslibs})
 		GET_FILENAME_COMPONENT(_daslib_we ${_daslib} NAME_WE)
-        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "NATIVE_MODULE(\"${_module}\", \"${_daslib_we}\");\n")
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "NATIVE_MODULE(${_module}, ${_daslib_we});\n")
     ENDFOREACH()
 ENDFOREACH()
 

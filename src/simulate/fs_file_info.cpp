@@ -68,7 +68,14 @@ namespace das {
                 info.moduleName = req.substr(np+1);
                 info.fileName = daslibPath + "/" + info.moduleName + ".das";
 
+                #define NATIVE_MODULE(dname, module) \
+                    if ( info.ModuleName == #module ) { \
+                        info.fileName = daslibPath + "/../modules/" + #module + "/daslib/" + #module + ".das"; \
+                    }
+
                 #include "modules/external_resolve.inc"
+
+                #undef NATIVE_MODULE
 
                 return info;
             }
