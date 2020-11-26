@@ -19,7 +19,7 @@ SETUP_COMPILER()
 
 SET(DAS_MODULES_RESOLVE_INC ${PROJECT_SOURCE_DIR}/include/modules/external_resolve.inc)
 SET(DAS_MODULES_NEED_INC ${PROJECT_SOURCE_DIR}/include/modules/external_need.inc)
-FILE(WRITE ${DAS_MODULES_RESOLVE_INC}.output "")
+FILE(WRITE ${DAS_MODULES_RESOLVE_INC} "")
 FILE(WRITE ${DAS_MODULES_NEED_INC}.output "")
 
 MACRO(ADD_CPP_MODULE cpp_module)
@@ -32,12 +32,9 @@ FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
     FILE(GLOB MODULE_DASLIBS RELATIVE "${PROJECT_SOURCE_DIR}/modules/${module}/daslib" "modules/${module}/daslib/*")
     FOREACH(daslib ${MODULE_DASLIBS})
-        FILE(APPEND ${DAS_MODULES_RESOLVE_INC}.output "ADD_NATIVE_MODULE(\"${module}\", \"${daslib}\");\n")
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "ADD_NATIVE_MODULE(\"${module}\", \"${daslib}\");\n")
     ENDFOREACH()
 ENDFOREACH()
-
-CONFIGURE_FILE(${DAS_MODULES_RESOLVE_INC}.output ${DAS_MODULES_RESOLVE_INC} COPYONLY)
-CONFIGURE_FILE(${DAS_MODULES_NEED_INC}.output ${DAS_MODULES_NEED_INC} COPYONLY)
 
 
 FLEX(src/parser/ds_lexer.lpp)
@@ -291,7 +288,6 @@ include/daScript/simulate/aot_builtin_ast.h
 include/daScript/simulate/aot_builtin_debugger.h
 include/daScript/simulate/fs_file_info.h
 src/simulate/fs_file_info.cpp
-${DAS_MODULES_RESOLVE_INC}
 )
 list(SORT SIMULATE_SRC)
 SOURCE_GROUP_FILES("simulate" SIMULATE_SRC)
@@ -479,7 +475,6 @@ add_dependencies(pathTracer pathTracerAot dasAotStub)
 
 SET(DASCRIPT_MAIN_SRC
 utils/daScript/main.cpp
-${DAS_MODULES_NEED_INC}
 )
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 
