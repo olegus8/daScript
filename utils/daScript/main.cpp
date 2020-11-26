@@ -86,7 +86,7 @@ int main(int argc, char * argv[]) {
     NEED_MODULE(Module_UriParser);
     NEED_MODULE(Module_FIO);
 
-    #include "external_modules_need.inc"
+    #include "external_need.inc"
 
     // compile and run
     for ( const auto & fn : files ) {

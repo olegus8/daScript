@@ -68,7 +68,7 @@ namespace das {
                 info.moduleName = req.substr(np+1);
                 info.fileName = daslibPath + "/" + info.moduleName + ".das";
 
-                #include "external_modules_resolve.inc"
+                #include "modules/external_resolve.inc"
 
                 return info;
             }
