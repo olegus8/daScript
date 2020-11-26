@@ -19,8 +19,8 @@ SETUP_COMPILER()
 
 SET(DAS_MODULES_RESOLVE_INC ${PROJECT_SOURCE_DIR}/include/modules/external_resolve.inc)
 SET(DAS_MODULES_NEED_INC ${PROJECT_SOURCE_DIR}/include/modules/external_need.inc)
-FILE(WRITE ${DAS_MODULES_RESOLVE_INC} "")
-FILE(WRITE ${DAS_MODULES_NEED_INC} "")
+FILE(WRITE ${DAS_MODULES_RESOLVE_INC}.temp "")
+FILE(WRITE ${DAS_MODULES_NEED_INC}.temp "")
 
 SET(DAS_MODULES_LIBS)
 FILE(GLOB _modules RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
@@ -30,16 +30,29 @@ FOREACH(_module ${_modules})
     ENDMACRO()
 
     FUNCTION(ADD_MODULE_CPP cpp)
-        FILE(APPEND ${DAS_MODULES_NEED_INC} "NEED_MODULE(Module_${cpp});\n")
+        FILE(APPEND ${DAS_MODULES_NEED_INC}.temp "NEED_MODULE(Module_${cpp});\n")
     ENDFUNCTION()
 
     FUNCTION(ADD_MODULE_NATIVE native)
-        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "NATIVE_MODULE(${_module}, ${native});\n")
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC}.temp "NATIVE_MODULE(${_module}, ${native});\n")
     ENDFUNCTION()
 
     INCLUDE(modules/${_module}/CMakeLists.txt OPTIONAL)
 ENDFOREACH()
 
+ADD_CUSTOM_COMMAND(
+    DEPENDS ${DAS_MODULES_NEED_INC}.temp
+    OUTPUT ${DAS_MODULES_NEED_INC}
+    VERBATIM
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DAS_MODULES_NEED_INC}.temp  ${DAS_MODULES_NEED_INC}
+)
+
+ADD_CUSTOM_COMMAND(
+    DEPENDS ${DAS_MODULES_RESOLVE_INC}.temp
+    OUTPUT ${DAS_MODULES_RESOLVE_INC}
+    VERBATIM
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DAS_MODULES_RESOLVE_INC}.temp  ${DAS_MODULES_RESOLVE_INC}
+)
 
 FLEX(src/parser/ds_lexer.lpp)
 BISON(src/parser/ds_parser.ypp)
@@ -292,6 +305,7 @@ include/daScript/simulate/aot_builtin_ast.h
 include/daScript/simulate/aot_builtin_debugger.h
 include/daScript/simulate/fs_file_info.h
 src/simulate/fs_file_info.cpp
+${DAS_MODULES_RESOLVE_INC}
 )
 list(SORT SIMULATE_SRC)
 SOURCE_GROUP_FILES("simulate" SIMULATE_SRC)
@@ -479,6 +493,7 @@ add_dependencies(pathTracer pathTracerAot dasAotStub)
 
 SET(DASCRIPT_MAIN_SRC
 utils/daScript/main.cpp
+${DAS_MODULES_NEED_INC}
 )
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 

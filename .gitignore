@@ -5,6 +5,7 @@ cmake_temp/
 tmtags
 
 *.output
+*.temp
 **/_aot_generated
 
 build/
