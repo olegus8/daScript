@@ -1,1 +1,1 @@
-ADD_NATIVE_MODULE("dasVulkan", "vulkan_boost.das");
+ADD_NATIVE_MODULE("dasVulkan", "vulkan_boost");
