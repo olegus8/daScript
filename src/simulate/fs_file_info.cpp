@@ -69,7 +69,7 @@ namespace das {
                 info.fileName = daslibPath + "/" + info.moduleName + ".das";
 
                 #define NATIVE_MODULE(dname, module) \
-                    if ( info.ModuleName == #module ) { \
+                    if ( info.moduleName == #module ) { \
                         info.fileName = daslibPath + "/../modules/" + #module + "/daslib/" + #module + ".das"; \
                     }
 
