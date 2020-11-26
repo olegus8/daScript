@@ -58,7 +58,7 @@ src/parser/ds_parser.output
 src/parser/ds_lexer.cpp
 )
 
-SET(PARSER_SRC)
+SET(PARSER_SRC
 src/parser/ds_parser.ypp
 src/parser/ds_lexer.lpp
 )

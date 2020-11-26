@@ -1,3 +1,1 @@
-if ( info.moduleName == "vulkan_boost" ) {
-    info.fileName = dasLibPath + "/../modules/dasVulkan/vulkan_boost.das";
-}
+ADD_NATIVE_MODULE("dasVulkan", "vulkan_boost.das");
