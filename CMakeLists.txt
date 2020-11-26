@@ -22,19 +22,18 @@ SET(DAS_MODULES_NEED_INC ${PROJECT_SOURCE_DIR}/include/modules/external_need.inc
 FILE(WRITE ${DAS_MODULES_RESOLVE_INC} "")
 FILE(WRITE ${DAS_MODULES_NEED_INC} "")
 
-MACRO(ADD_CPP_MODULE cpp_module)
+FUNCTION(ADD_CPP_MODULE cpp_module)
     FILE(APPEND ${DAS_MODULES_NEED_INC} "NEED_MODULE(Module_${cpp_module});\n")
-ENDMACRO()
+ENDFUNCTION()
 
 SET(DAS_MODULES_LIBS)
 FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
 FOREACH(_module ${DAS_MODULES})
+    FUNCTION(ADD_NATIVE_MODULE native_module)
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "NATIVE_MODULE(${_module}, ${native_module});\n")
+    ENDFUNCTION()
+
     INCLUDE(modules/${_module}/CMakeLists.txt OPTIONAL)
-    FILE(GLOB _daslibs RELATIVE "${PROJECT_SOURCE_DIR}/modules/${_module}/daslib" "modules/${_module}/daslib/*")
-    FOREACH(_daslib ${_daslibs})
-		GET_FILENAME_COMPONENT(_daslib_we ${_daslib} NAME_WE)
-        FILE(APPEND ${DAS_MODULES_RESOLVE_INC} "NATIVE_MODULE(${_module}, ${_daslib_we});\n")
-    ENDFOREACH()
 ENDFOREACH()
 
 
