@@ -1,1 +1,1 @@
-NATIVE_MODULE(dasVulkan, vulkan-boost);
+NATIVE_MODULE(dasVulkan, vulkan_boost);
