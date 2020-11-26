@@ -17,17 +17,23 @@ FIND_FLEX_AND_BISON()
 SETUP_COMPILER()
 
 
-SET(DAS_MODULES_RESOLVE_INC include/modules/external_resolve.inc)
-SET(DAS_MODULES_NEED_INC include/modules/external_need.inc)
+SET(DAS_MODULES_RESOLVE_INC ${PROJECT_SOURCE_DIR}/include/modules/external_resolve.inc)
+SET(DAS_MODULES_NEED_INC ${PROJECT_SOURCE_DIR}/include/modules/external_need.inc)
 FILE(WRITE ${DAS_MODULES_RESOLVE_INC}.output "")
 FILE(WRITE ${DAS_MODULES_NEED_INC}.output "")
+
+MACRO(ADD_CPP_MODULE cpp_module)
+    FILE(APPEND ${DAS_MODULES_NEED_INC}.output "NEED_MODULE(Module_${cpp_module});\n")
+MACRO()
 
 SET(DAS_MODULES_LIBS)
 FILE(GLOB DAS_MODULES RELATIVE "${PROJECT_SOURCE_DIR}/modules" "modules/*")
 FOREACH(module ${DAS_MODULES})
     INCLUDE(modules/${module}/CMakeLists.txt OPTIONAL)
-    CAT(modules/${module}/module_resolve.inc ${DAS_MODULES_RESOLVE_INC}.output)
-    CAT(modules/${module}/module_need.inc ${DAS_MODULES_NEED_INC}.output)
+    FILE(GLOB MODULE_DASLIBS RELATIVE "${PROJECT_SOURCE_DIR}/modules/${module}/daslib" "modules/${module}/daslib/*")
+    FOREACH(daslib ${MODULE_DASLIBS})
+        FILE(APPEND ${DAS_MODULES_RESOLVE_INC}.output "MODULE_DASLIB(${module}, ${daslib});\n")
+    ENDFOREACH()
 ENDFOREACH()
 
 CONFIGURE_FILE(${DAS_MODULES_RESOLVE_INC}.output ${DAS_MODULES_RESOLVE_INC} COPYONLY)
@@ -52,7 +58,7 @@ src/parser/ds_parser.output
 src/parser/ds_lexer.cpp
 )
 
-SET(PARSER_SRC
+SET(PARSER_SRC)
 src/parser/ds_parser.ypp
 src/parser/ds_lexer.lpp
 )
