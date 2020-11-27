@@ -69,10 +69,8 @@ def test
     verify ( efn_takeOne_giveTwo(SomeEnum one)==SomeEnum two )
     verify ( efn_takeOne_giveTwo_98(SomeEnum98 SomeEnum98_one)==SomeEnum98 SomeEnum98_two )
 
-    //TODO: !!!DO NOT COMMIT!!!
-    // result_free works. result_efn crashes on unhandled exception
-    //var result_free = free_takeOne_giveTwo(SomeEnum one)
     var result_efn = efn_takeOne_giveTwo(SomeEnum one)
+    assert(result_efn == SomeEnum two)
 
     var goo : GooEnum
     goo = GooEnum regular

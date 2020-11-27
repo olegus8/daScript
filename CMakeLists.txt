@@ -339,6 +339,7 @@ ADD_LIBRARY(libDaScript ${VECMATH_SRC} ${AST_SRC} ${BUILTIN_SRC} ${MISC_SRC} ${S
     ${SIMULATE_FUSION_SRC} ${TEST_SRC} ${MAIN_SRC} ${PARSER_SRC} ${PARSER_GENERATED_SRC}
 	${DAGOR_NOISE_SRC} ${FLAT_HASH_MAP_SRC} ${DAS_LIB_SRC})
 SETUP_CPP11(libDaScript)
+target_precompile_headers(libDaScript PUBLIC include/daScript/misc/platform.h)
 
 IF(DAS_GEN_FOR_EACH_INCLUDED)
     DAS_GEN_FOR_EACH(include/daScript/simulate/for_each.h ${MAX_DAS_FOR_EACH_ARGS})
@@ -388,6 +389,33 @@ MACRO(DAS_AOT_DIR inFiles genList mainTarget dasAotTool)
     ENDFOREACH()
 ENDMACRO()
 
+SET(UNITZE_BUILD_BATCH_SIZE 10)
+
+MACRO(UNITIZE_BUILD input_dir genList)
+    set(unitList)
+    set(files ${${genList}})
+    set(out_dir "${CMAKE_SOURCE_DIR}/${input_dir}/_aot_generated")
+    set_source_files_properties(${files} PROPERTIES HEADER_FILE_ONLY true)
+    set(unit_build_file "")
+    set(file_index 0)
+    set(batch_index 0)
+    foreach(source_file ${files} )
+        if(file_index EQUAL "0")
+            set(unit_build_file "${out_dir}/unity_build_${batch_index}.cpp")
+            FILE(WRITE ${unit_build_file} "// unity build batch ${batch_index}\n")
+            list(APPEND unitList ${unit_build_file})
+        endif()
+        get_filename_component(input_name ${source_file} NAME)
+        FILE(APPEND ${unit_build_file} "#include \"${input_name}\"\n")
+        math(EXPR file_index "${file_index} + 1")
+        if(file_index EQUAL ${UNITZE_BUILD_BATCH_SIZE})
+            set(file_index 0)
+            math(EXPR batch_index "${batch_index} + 1")
+        endif()
+    endforeach()
+    list(APPEND ${genList} ${unitList})
+ENDMACRO()
+
 add_custom_target(dasAotStub)
 SET(AOT_GENERATED_SRC)
 DAS_AOT("daslib/functional.das" AOT_GENERATED_SRC dasAotStub dasAot)
@@ -397,6 +425,7 @@ DAS_AOT("daslib/regex.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/regex_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 DAS_AOT("daslib/strings_boost.das" AOT_GENERATED_SRC dasAotStub dasAot)
 SOURCE_GROUP_FILES("aot stub" AOT_GENERATED_SRC)
+#UNITIZE_BUILD("daslib" AOT_GENERATED_SRC)
 
 # libUriParser
 
@@ -447,11 +476,10 @@ utils/dasContDev/main.cpp
 )
 SOURCE_GROUP_FILES("main" DASCONTDEV_MAIN_SRC)
 
-add_executable(dasContDev ${DASCONTDEV_MAIN_SRC} ${AOT_GENERATED_SRC})
+add_executable(dasContDev ${DASCONTDEV_MAIN_SRC})
 TARGET_LINK_LIBRARIES(dasContDev libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 ADD_DEPENDENCIES(dasContDev libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasContDev)
-add_dependencies(dasContDev dasAotStub)
 SETUP_LTO(dasContDev)
 
 # PathTracer helper
@@ -488,6 +516,7 @@ ADD_DEPENDENCIES(pathTracer libDaScript libPathTracerHelper)
 TARGET_INCLUDE_DIRECTORIES(pathTracer PUBLIC examples/pathTracer)
 SETUP_CPP11(pathTracer)
 add_dependencies(pathTracer pathTracerAot dasAotStub)
+target_precompile_headers(pathTracer PUBLIC include/daScript/misc/platform.h)
 
 # Stand alone command line compiler
 
@@ -497,11 +526,10 @@ ${DAS_MODULES_NEED_INC}
 )
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 
-add_executable(daScript ${DASCRIPT_MAIN_SRC} ${AOT_GENERATED_SRC})
+add_executable(daScript ${DASCRIPT_MAIN_SRC})
 TARGET_LINK_LIBRARIES(daScript libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 ADD_DEPENDENCIES(daScript libDaScript libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(daScript)
-add_dependencies(daScript dasAotStub)
 SETUP_LTO(daScript)
 
 # Test module
@@ -570,6 +598,7 @@ SOURCE_GROUP_FILES("source" TEST_MAIN_SRC)
 add_custom_target(daScriptTestAot)
 SET(TEST_GENERATED_SRC)
 DAS_AOT_DIR("${UNIT_TEST_SRC}" TEST_GENERATED_SRC daScriptTestAot dasAot)
+UNITIZE_BUILD("examples/test/unit_tests" TEST_GENERATED_SRC)
 #DAS_AOT("examples/test/hello_world.das" TEST_GENERATED_SRC daScriptTestAot dasAot)
 SOURCE_GROUP_FILES("generated" TEST_GENERATED_SRC)
 
@@ -581,6 +610,7 @@ TARGET_INCLUDE_DIRECTORIES(daScriptTest PUBLIC examples/test)
 SETUP_CPP11(daScriptTest)
 add_dependencies(daScriptTest daScriptTestAot dasAotStub)
 SETUP_LTO(daScriptTest)
+target_precompile_headers(daScriptTest PUBLIC include/daScript/misc/platform.h)
 
 # Profile module
 
@@ -620,6 +650,7 @@ TARGET_LINK_LIBRARIES(daScriptProfile libDaScript libDaScriptProfile)
 ADD_DEPENDENCIES(daScriptProfile libDaScript dasAot libDaScriptProfile)
 SETUP_CPP11(daScriptProfile)
 add_dependencies(daScriptProfile daScriptProfileAot dasAotStub)
+target_precompile_headers(daScriptProfile PUBLIC include/daScript/misc/platform.h)
 
 MACRO(DAS_TUTORIAL tutorial_name tutorial_src)
     add_executable(${tutorial_name} ${tutorial_src})
