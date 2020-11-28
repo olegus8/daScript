@@ -36,7 +36,9 @@ def test_generic_infer
 
 def test_default_ptr
     var a : int = 1
-    //TODO: this fails saying types mismatch int? and void?
+    //TODO: this fails saying this:
+    //  invalid argument a. expecting int? implicit -const,
+    //  passing void? const
     //fn_with_default_null_ptr()
     assert(a == 1)
     fn_with_default_null_ptr(safe_addr(a))
