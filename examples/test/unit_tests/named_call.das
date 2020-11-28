@@ -22,7 +22,7 @@ def hoo(a=1;b)
 def hoo(a,b,c)
     return a + b + c
 
-def fn_with_default_null_ptr(var a : int? implicit = null)
+def fn_with_default_null_ptr(var a : int? implicit = [[ int? ]])
     var b : int
     a ?? b = 2
 
