@@ -1,5 +1,7 @@
 // options log = true, log_infer_passes = true
 
+require daslib/safe_addr
+
 def boo(a:int=1;b:int)
     return a + b
 
@@ -20,6 +22,10 @@ def hoo(a=1;b)
 def hoo(a,b,c)
     return a + b + c
 
+def fn_with_default_ptr(var a : int? = null)
+    if a != null
+        *a = 2
+
 def test_generic_infer
     let t1 = hoo([a=2,b=3])
     assert(t1==5)
@@ -28,10 +34,18 @@ def test_generic_infer
     let t3 = hoo([a=1,b=2,c=3])
     assert(t3==6)
 
+def test_default_ptr
+    var a = 1
+    fn_with_default_ptr()
+    assert(a == 1)
+    fn_with_default_ptr(safe_addr(a))
+    assert(a == 2)
+
 [export]
 def test
     test_function_infer()
     test_generic_infer()
+    test_default_ptr()
     return true
 
 
