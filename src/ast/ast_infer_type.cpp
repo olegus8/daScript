@@ -1632,8 +1632,14 @@ namespace das {
                 c->type->constant = true;
             } else if ( c->baseType==Type::tPointer ) {
                 c->type = make_smart<TypeDecl>(c->baseType);
-                c->type->constant = true;
-                c->type->smartPtr = (static_cast<ExprConstPtr *>(c))->isSmartPtr;
+                auto cptr = static_cast<ExprConstPtr *>(c);
+                c->type->smartPtr = cptr->isSmartPtr;
+                if ( cptr->ptrType ) {
+                    c->type->firstType = make_smart<TypeDecl>(*cptr->ptrType);
+                    c->type->constant = c->type->firstType->constant;
+                } else {
+                    c->type->constant = true;
+                }
             } else {
                 c->type = make_smart<TypeDecl>(c->baseType);
                 c->type->constant = true;
@@ -2482,36 +2488,45 @@ namespace das {
                 expr->typeexpr->ref = false;
             }
             // verify
-            if ( !expr->typeexpr  ) {
+            bool allowMissingTypeExpr = false;
+            if ( expr->trait=="builtin_function_exists") {
+                allowMissingTypeExpr = true;
+            }
+            bool allowMissingType = false;
+            if ( expr->trait=="builtin_annotation_exists") {
+                allowMissingType = true;
+            }
+            //
+            if ( !expr->typeexpr && !allowMissingTypeExpr ) {
                 error("typeinfo(" + (expr->typeexpr ? expr->typeexpr->describe() : "...") + ") can't be infered",  "", "",
                     expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
             auto nErrors = program->errors.size();
-            if ( expr->typeexpr->isAlias() ) {
-                if ( auto eT = inferAlias(expr->typeexpr) ) {
-                    expr->typeexpr = eT;
-                    reportAstChanged();
-                    return Visitor::visit(expr);
-                } else {
-                    error("undefined typeinfo type expression type " + expr->typeexpr->describe(), "", "",
-                          expr->at, CompilationError::type_not_found);
+            if ( expr->typeexpr ) {
+                if ( expr->typeexpr->isAlias() ) {
+                    if ( auto eT = inferAlias(expr->typeexpr) ) {
+                        expr->typeexpr = eT;
+                        reportAstChanged();
+                        return Visitor::visit(expr);
+                    } else if ( !allowMissingType ) {
+                        error("undefined typeinfo type expression type " + expr->typeexpr->describe(), "", "",
+                            expr->at, CompilationError::type_not_found);
+                        return Visitor::visit(expr);
+                    }
+                }
+                if ( expr->typeexpr->isAuto() ) {
+                    error("typeinfo(... auto) is undefined, " + expr->typeexpr->describe(), "", "",
+                        expr->at, CompilationError::typeinfo_auto);
                     return Visitor::visit(expr);
                 }
+                if ( allowMissingType ? expr->typeexpr->isAuto() : expr->typeexpr->isAutoOrAlias() ) {
+                    error("typeinfo(" + (expr->typeexpr ? expr->typeexpr->describe() : "...") + ") can't be fully infered",  "", "",
+                        expr->at, CompilationError::type_not_found);
+                    return Visitor::visit(expr);
+                }
+                verifyType(expr->typeexpr,true);
             }
-            if ( expr->typeexpr->isAuto() ) {
-                error("typeinfo(... auto) is undefined, " + expr->typeexpr->describe(), "", "",
-                      expr->at, CompilationError::typeinfo_auto);
-                return Visitor::visit(expr);
-            }
-            // TODO: verify. is this even necessary with tests above?
-            // if ( !isFullySealedType(expr->typeexpr) ) {
-            if ( expr->typeexpr->isAutoOrAlias() ) {
-                error("typeinfo(" + (expr->typeexpr ? expr->typeexpr->describe() : "...") + ") can't be fully infered",  "", "",
-                    expr->at, CompilationError::type_not_found);
-                return Visitor::visit(expr);
-            }
-            verifyType(expr->typeexpr,true);
             if ( nErrors==program->errors.size() ) {
                 if ( expr->trait=="sizeof" ) {
                     reportAstChanged();
@@ -2802,6 +2817,39 @@ namespace das {
                         error("typeinfo(offsetof<" + expr->subtrait
                               + "> ...) is only defined for structures, " + expr->typeexpr->describe(), "", "",
                             expr->at, CompilationError::typeinfo_undefined);
+                    }
+                } else if ( expr->trait=="builtin_function_exists" ) {
+                    if ( !expr->subexpr ) {
+                        error("builtin_function_exists requires subexpression", "", "",
+                            expr->at,CompilationError::typeinfo_undefined);
+                    } else {
+                        if ( expr->subexpr->rtti_isAddr() ) {
+                            auto eaddr = static_pointer_cast<ExprAddr>(expr->subexpr);
+                            if ( !eaddr->func ) {
+                                reportAstChanged();
+                                return make_smart<ExprConstBool>(false);
+                            } else if ( !eaddr->func->builtIn ) {
+                                error("builtin_function_exists of non-builtin function @@" + eaddr->func->describe(), "", "",
+                                    expr->at,CompilationError::typeinfo_undefined);
+                            } else {
+                                reportAstChanged();
+                                return make_smart<ExprConstBool>(true);
+                            }
+                        } else {
+                            error("unsupported mangled name subexpression ", expr->subexpr->__rtti, "",
+                                expr->at,CompilationError::typeinfo_undefined);
+                        }
+                    }
+                } else if ( expr->trait=="builtin_annotation_exists" ) {
+                    if ( expr->typeexpr->isAlias() ) {
+                        reportAstChanged();
+                        return make_smart<ExprConstBool>(false);
+                    } else if ( !expr->typeexpr->isHandle() ) {
+                        error("builtin_function_exists requires annotation type", "", "",
+                            expr->at,CompilationError::typeinfo_undefined);
+                    } else {
+                        reportAstChanged();
+                        return make_smart<ExprConstBool>(true);
                     }
                 } else {
                     auto mtis = program->findTypeInfoMacro(expr->trait);
@@ -6056,18 +6104,21 @@ namespace das {
                     error("[[" + expr->makeType->describe() + "() ]] enumeration is missing 0 value", "", "",
                           expr->at, CompilationError::invalid_type);
                 }
-            } else if ( expr->type->isWorkhorseType() ) {
-                expr->type->ref = false;
-                reportAstChanged();
-                auto ews = Program::makeConst(expr->at, expr->type, v_zero());
-                ews->type = make_smart<TypeDecl>(*expr->type);
-                return ews;
             } else if ( expr->type->isPointer() ) {
                 expr->type->ref = false;
                 reportAstChanged();
                 auto ews = make_smart<ExprConstPtr>(expr->at);
                 ews->type = make_smart<TypeDecl>(*expr->type);
                 ews->isSmartPtr = expr->type->smartPtr;
+                if ( expr->type->firstType ) {
+                    ews->ptrType = make_smart<TypeDecl>(*expr->type->firstType);
+                }
+                return ews;
+            } else if ( expr->type->isWorkhorseType() ) {
+                expr->type->ref = false;
+                reportAstChanged();
+                auto ews = Program::makeConst(expr->at, expr->type, v_zero());
+                ews->type = make_smart<TypeDecl>(*expr->type);
                 return ews;
             } else if ( !expr->type->isRefType() ) {
                 expr->type->ref = true;
