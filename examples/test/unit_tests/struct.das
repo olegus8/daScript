@@ -47,47 +47,8 @@ struct L1
 var
     glob : L1? = null
 
-struct AB
-    a : uint
-    b : uint
-
-struct BA
-    b : uint
-    a : uint
-
-struct A
-    a : uint
-
-def finalize(var s : AB)
-    pass
-
-def finalize(var s : BA)
-    pass
-
-def finalize(var s : A)
-    pass
-
-def test_finalizers()
-    var ab : AB
-
-    /*
-    30304: too many custom  finalize functions exist for finalize ( s : AB
-    -const ) : void
-    candidates are:
-        finalize ( s : AB -const ) : void
-        finalize ( s : A -const ) : void
-    */
-    //delete ab
-
-
-    var ba : BA
-    delete ba
-    var a : A
-    delete a
-
 [export]
 def test:bool
-    test_finalizers()
     assert ( typeinfo(sizeof [[Dummy]])==0 )
     if true
         var b:Ball? = new Ball
