@@ -77,7 +77,7 @@ def test_finalizers()
         finalize ( s : AB -const ) : void
         finalize ( s : A -const ) : void
     */
-    delete ab
+    //delete ab
 
 
     var ba : BA
