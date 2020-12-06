@@ -36,6 +36,16 @@ def test_native
     b?.fooPtr?.fooData ?? idummy = 4
     assert(b.fooPtr.fooData==4 && idummy==3)
 
+struct MyStruct
+    e : EntityId
+
+[sideeffects]
+def test_managed
+    var a = [[EntityId]]
+    var b = [[MyStruct]]
+    b.e = a
+    var c = [[MyStruct e = a]]
+
 [sideeffects]
 def test_handled
     var a:TestObjectFoo?
@@ -71,4 +81,5 @@ def test_handled
 def test:bool
     test_native()
     test_handled()
+    test_managed()
     return true
