@@ -119,7 +119,6 @@ src/ast/ast_export.cpp
 src/ast/ast_parse.cpp
 src/ast/ast_debug_info_helper.cpp
 src/ast/ast_handle.cpp
-src/ast/ast_runtime_helpers.cpp
 include/daScript/ast/compilation_errors.h
 include/daScript/ast/ast_typedecl.h
 include/daScript/ast/ast_typefactory.h
@@ -181,7 +180,6 @@ XXD(src/builtin/debugger.das)
 
 SET(MISC_SRC
 include/daScript/misc/enums.h
-include/daScript/misc/function_traits.h
 include/daScript/misc/hal.h
 include/daScript/misc/fpe.h
 include/daScript/misc/copy_bytes.h
@@ -197,6 +195,7 @@ include/daScript/misc/fnv.h
 include/daScript/misc/smart_ptr.h
 include/daScript/misc/free_list.h
 include/daScript/misc/sysos.h
+include/daScript/misc/callable.h
 src/misc//sysos.cpp
 src/misc/string_writer.cpp
 src/misc/memory_model.cpp

@@ -173,8 +173,8 @@ namespace das {
                         error("can't declare a void array, " + arrayType->describe(), "", "",
                               arrayType->at,CompilationError::invalid_array_type);
                     }
-                    if ( !arrayType->isLocal() ) {
-                        error("array type has to be 'local', " + arrayType->describe(), "", "",
+                    if ( !arrayType->canBePlacedInContainer() ) {
+                        error("can't have array of non-trivial type, " + arrayType->describe(), "", "",
                               arrayType->at,CompilationError::invalid_type);
                     }
                     verifyType(arrayType);
@@ -204,8 +204,8 @@ namespace das {
                         error("table value can't be declared as a reference, " + valueType->describe(), "", "",
                               valueType->at,CompilationError::invalid_table_type);
                     }
-                    if ( !valueType->isLocal() ) {
-                        error("table value has to be 'local', " + valueType->describe(), "", "",
+                    if ( !valueType->canBePlacedInContainer() ) {
+                        error("can't have table value of non-trivial type, " + valueType->describe(), "", "",
                               valueType->at,CompilationError::invalid_type);
                     }
                     verifyType(valueType);
@@ -961,7 +961,13 @@ namespace das {
                 ss << "\t";
                 if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
                     ss << missFn->module->name << "::";
-                ss << missFn->describe() << "\n";
+                ss << missFn->describe();
+                if ( missFn->builtIn ) {
+                    ss << " // builtin";
+                } else {
+                    ss << " at " << missFn->at.describe();
+                }
+                ss << "\n";
                 if ( reportDetails ) {
                     ss << describeMismatchingFunction(missFn, types, inferAuto, inferBlocks);
                 }
@@ -999,7 +1005,13 @@ namespace das {
                 ss << "\t";
                 if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
                     ss << missFn->module->name << "::";
-                ss << missFn->describe() << "\n";
+                ss << missFn->describe();
+                if ( missFn->builtIn ) {
+                    ss << " // builtin";
+                } else if ( missFn->at.line ) {
+                    ss << " at " << missFn->at.describe();
+                }
+                ss << "\n";
                 if ( reportDetails ) {
                     ss << describeMismatchingFunction(missFn, arguments, inferAuto, inferBlocks);
                 }
@@ -1042,7 +1054,9 @@ namespace das {
             vector<TypeDeclPtr> argDummy;
             argDummy.push_back(make_smart<TypeDecl>(*left));
             argDummy.push_back(make_smart<TypeDecl>(*right));
-            return findMatchingFunctions("_::clone", argDummy);
+            auto clones = findMatchingFunctions("_::clone", argDummy);
+            applyLSP(argDummy, clones);
+            return clones;
         }
 
         bool verifyCloneFunc ( const vector<FunctionPtr> & fnList, const LineInfo & at ) const {
@@ -1052,7 +1066,9 @@ namespace das {
         vector<FunctionPtr> getFinalizeFunc ( const TypeDeclPtr & subexpr ) const {
             vector<TypeDeclPtr> argDummy;
             argDummy.push_back(make_smart<TypeDecl>(*subexpr));
-            return findMatchingFunctions("_::finalize", argDummy);
+            auto fins = findMatchingFunctions("_::finalize", argDummy);
+            applyLSP(argDummy, fins);
+            return fins;
         }
 
         bool verifyFinalizeFunc ( const vector<FunctionPtr> & fnList, const LineInfo & at ) const {
@@ -1453,6 +1469,10 @@ namespace das {
                     error("this variable type can't be shared, " + var->type->describe(), "", "",
                         var->at, CompilationError::invalid_variable_type);
                 }
+            }
+            if ( !var->init && var->type->hasNonTrivialCtor() ) {
+                error("global variable of type " + var->type->describe() + " needs to be initialized", "", "",
+                    var->at, CompilationError::invalid_variable_type);
             }
             verifyType(var->type);
             return Visitor::visitGlobalLet(var);
@@ -4110,7 +4130,11 @@ namespace das {
             } else {
                 TextWriter errs;
                 for ( auto & var : vars ) {
-                    errs << "\t" << var->module->name << "::" << var->name << " : " << var->type->describe() << "\n";
+                    errs << "\t" << var->module->name << "::" << var->name << " : " << var->type->describe();
+                    if ( var->at.line ) {
+                        errs << " at " << var->at.describe();
+                    }
+                    errs << "\n";
                 }
                 error("too many matching variables " + expr->name, "candidates are:\n" + errs.str(), "",
                     expr->at, CompilationError::variable_not_found);
@@ -4146,6 +4170,7 @@ namespace das {
             // infer
             vector<TypeDeclPtr> types = { expr->subexpr->type };
             auto functions = findMatchingFunctions(expr->op, types);
+            applyLSP(types, functions);
             if ( functions.size()==0 ) {
                 reportMissing(expr, types, "no matching operator ", true, CompilationError::operator_not_found);
             } else if ( functions.size()>1 ) {
@@ -4266,6 +4291,7 @@ namespace das {
                         expr->at, CompilationError::invalid_type);
             vector<TypeDeclPtr> types = { expr->left->type, expr->right->type };
             auto functions = findMatchingFunctions("_::" + expr->op, types);    // NOTE: operators always in the context of the callee
+            applyLSP(types, functions);
             if (functions.size() != 1) {
                 if (expr->left->type->isNumeric() && expr->right->type->isNumeric()) {
                     if ( isAssignmentOperator(expr->op) ) {
@@ -5109,7 +5135,12 @@ namespace das {
                       var->at, CompilationError::unsafe);
             }
             if ( !var->type->isAutoOrAlias() ){
-                if ( var->init && var->init->rtti_isCast() ) {
+                if ( !var->init && var->type->isLocal() ) { // we already report error for non-local
+                    if ( var->type->hasNonTrivialCtor() ) {
+                        error("local variable of type " + var->type->describe() + " needs to be initialized", "", "",
+                            var->at, CompilationError::invalid_variable_type);
+                    }
+                } else if ( var->init && var->init->rtti_isCast() ) {
                     auto castExpr = static_pointer_cast<ExprCast>(var->init);
                     if ( castExpr->castType->isAuto() ) {
                         reportAstChanged();
@@ -5314,6 +5345,13 @@ namespace das {
             if ( expr->argumentsFailedToInfer ) return Visitor::visit(expr);
             auto functions = findMatchingFunctions(expr->name, expr->arguments, true);
             auto generics = findMatchingGenerics(expr->name, expr->arguments);
+            if ( functions.size()> 1 ) {
+                vector<TypeDeclPtr> types;
+                for ( const auto & arg : expr->arguments ) {
+                    types.push_back(arg->value->type);
+                }
+                applyLSP(types, functions);
+            }
             if ( generics.size()>1 || functions.size()>1 ) {
                 reportExcess(expr, "too many matching functions or generics ", functions, generics);
             } else if ( functions.size()==0 ) {
@@ -5373,10 +5411,10 @@ namespace das {
         }
 
         // however many casts is where its at
-        int computeSubstituteDistance ( ExprLooksLikeCall * expr, const FunctionPtr & fn ) const {
+        static int computeSubstituteDistance ( const vector<TypeDeclPtr> & arguments, const FunctionPtr & fn ) {
             int distance = 0;
-            for ( size_t i=0; i!=expr->arguments.size(); ++i ) {
-                const auto & argType = expr->arguments[i]->type;
+            for ( size_t i=0; i!=arguments.size(); ++i ) {
+                const auto & argType = arguments[i];
                 const auto & funType = fn->arguments[i]->type;
                 if ( !argType->isSameType ( *funType, RefMatters::no, ConstMatters::no,
                     TemporaryMatters::no, AllowSubstitute::no) ) {
@@ -5504,6 +5542,28 @@ namespace das {
             }
         }
 
+        static void applyLSP ( const vector<TypeDeclPtr> & arguments, vector<FunctionPtr> & functions ) {
+            if ( functions.size()<=1 ) return;
+            vector<pair<int,FunctionPtr>> fnm;
+            for ( auto & fn : functions ) {
+                auto dist = computeSubstituteDistance(arguments, fn);
+                fnm.push_back(make_pair(dist,fn));
+            }
+            sort ( fnm.begin(), fnm.end(), [&] ( auto a, auto b ) {
+                return a.first < b.first;
+            });
+            int count = 1;
+            int depth = fnm[0].first;
+            while ( count < int(fnm.size()) ) {
+                if ( fnm[count].first != depth ) break;
+                count ++;
+            }
+            if ( count == 1 ) {
+                functions.resize(1);
+                functions[0] = fnm[0].second;
+            }
+        }
+
         FunctionPtr inferFunctionCall ( ExprLooksLikeCall * expr ) {
             // infer
             vector<TypeDeclPtr> types;
@@ -5523,26 +5583,7 @@ namespace das {
             }
             auto functions = findMatchingFunctions(expr->name, types, true);
             auto generics = findMatchingGenerics(expr->name, types);
-            if ( functions.size()>1 ) {
-                vector<pair<int,FunctionPtr>> fnm;
-                for ( auto & fn : functions ) {
-                    auto dist = computeSubstituteDistance(expr, fn);
-                    fnm.push_back(make_pair(dist,fn));
-                }
-                sort ( fnm.begin(), fnm.end(), [&] ( auto a, auto b ) {
-                    return a.first < b.first;
-                });
-                int count = 1;
-                int depth = fnm[0].first;
-                while ( count < int(fnm.size()) ) {
-                    if ( fnm[count].first != depth ) break;
-                    count ++;
-                }
-                if ( count == 1 ) {
-                    functions.resize(1);
-                    functions[0] = fnm[0].second;
-                }
-            }
+            applyLSP(types,functions);
             if ( functions.size()==1 ) {
                 auto funcC = functions.back();
                 if ( funcC->firstArgReturnType ) {
@@ -6280,9 +6321,48 @@ namespace das {
                 return Visitor::visitMakeArrayIndex(expr,index,init,last);
             }
             if ( !canCopyOrMoveType(expr->recordType,init->type,TemporaryMatters::no) ) {
-                error("can't initialize array element " + to_string(index) + "; expecting "
-                      +expr->recordType->describe()+", passing "+init->type->describe(), "", "",
-                        init->at, CompilationError::invalid_type );
+                if ( expr->recordType->isVariant() ) {
+                    int uidx = expr->recordType->getVariantUniqueFieldIndex(init->type);
+                    if ( uidx==-1 ) {
+                        vector<pair<string,TypeDeclPtr>> options;
+                        for ( size_t vi=0; vi != expr->recordType->argTypes.size(); ++vi ) {
+                            const auto & argT = expr->recordType->argTypes[vi];
+                            if ( argT->isSameType(*init->type,RefMatters::no,ConstMatters::no,TemporaryMatters::no,AllowSubstitute::no) ) {
+                                options.emplace_back(expr->recordType->argNames[vi], argT);
+                            }
+                        }
+                        if ( options.size()==0 ) {
+                            error("can't recognize unique variant " + init->type->describe() + " in " + expr->recordType->describe(), "", "",
+                                init->at, CompilationError::invalid_type);
+                        } else {
+                            TextWriter tw;
+                            for ( auto & opt : options ) {
+                                tw << "\t\t" << opt.first << ":" << opt.second->describe();
+                                if ( opt!=options.back() )
+                                    tw << "\n";
+                            }
+                            error("can't recognize unique variant " + init->type->describe() + " in " + expr->recordType->describe(),
+                                "\tcandidates are:\n" + tw.str(), "",
+                                init->at, CompilationError::invalid_type);
+                        }
+                    } else {
+                        auto mkv = make_smart<ExprMakeVariant>(expr->at);
+                        mkv->variants.push_back(make_smart<MakeFieldDecl>(
+                            init->at,
+                            expr->recordType->argNames[uidx],
+                            init->clone(),
+                            false,          // move
+                            false           // clone
+                        ));
+                        mkv->makeType = make_smart<TypeDecl>(*expr->recordType);
+                        reportAstChanged();
+                        return mkv;
+                    }
+                } else {
+                    error("can't initialize array element " + to_string(index) + "; expecting "
+                        +expr->recordType->describe()+", passing "+init->type->describe(), "", "",
+                            init->at, CompilationError::invalid_type );
+                }
             } else if ( !expr->recordType->canCopy() && expr->recordType->canMove() && init->type->isConst() ) {
                 error("can't move from a constant value\n\t" + init->type->describe(), "", "",
                     init->at, CompilationError::cant_move);
@@ -6300,6 +6380,39 @@ namespace das {
             if ( !expr->recordType ) {
                 return Visitor::visit(expr);
             }
+            if ( expr->recordType->isVariant() ) {
+                bool canPromoteToMakeVariant = true;
+                for ( auto & eval : expr->values ) {
+                    if ( !eval->rtti_isMakeVariant() ) {
+                        canPromoteToMakeVariant = false;
+                        break;
+                    } else {
+                        auto emkv = static_pointer_cast<ExprMakeVariant>(eval);
+                        if ( emkv->variants.size()!=1 ) {
+                            canPromoteToMakeVariant = false;
+                            break;
+                        }
+                    }
+                }
+                if ( canPromoteToMakeVariant ) {
+                        auto mkv = make_smart<ExprMakeVariant>(expr->at);
+                        for ( const auto & eval : expr->values ) {
+                            auto emkv = static_pointer_cast<ExprMakeVariant>(eval);
+                            DAS_ASSERT(emkv->variants.size()==1);
+                            const auto & fmkv = emkv->variants[0];
+                            mkv->variants.push_back(make_smart<MakeFieldDecl>(
+                                fmkv->at,
+                                fmkv->name,
+                                fmkv->value->clone(),
+                                bool(fmkv->moveSemantics),
+                                bool(fmkv->cloneSemantics)
+                            ));
+                        }
+                        mkv->makeType = make_smart<TypeDecl>(*expr->makeType);
+                        reportAstChanged();
+                        return mkv;
+                }
+            }
             if ( !expr->recordType->canCopy() && !expr->recordType->canMove() ) {
                 error("array element has to be copyable or moveable", "", "",
                     expr->at, CompilationError::invalid_type);
@@ -6311,14 +6424,25 @@ namespace das {
                 resT->dim[0] = resDim;
             } else {
                 DAS_ASSERT(expr->values.size()==1);
-                reportAstChanged();
-                auto resExpr = expr->values[0];
-                if ( resExpr->rtti_isMakeTuple() ) {
-                    auto mkt = static_pointer_cast<ExprMakeTuple>(resExpr);
-                    mkt->recordType = make_smart<TypeDecl>(*expr->recordType);
-                    mkt->makeType.reset();
+                auto eval = expr->values[0];
+                if ( !eval->type ) {
+                    error("unknown value type", "", "",
+                        expr->at, CompilationError::invalid_type);
+                    return Visitor::visit(expr);
+                } else if ( !expr->recordType->isSameType(*(eval->type),RefMatters::no,ConstMatters::no,TemporaryMatters::no,AllowSubstitute::no) ) {
+                    error("incompatible value type. expecting " + expr->recordType->describe() + " vs " + eval->type->describe(), "", "",
+                        eval->at, CompilationError::invalid_type);
+                    return Visitor::visit(expr);
+                } else {
+                    reportAstChanged();
+                    auto resExpr = expr->values[0];
+                    if ( resExpr->rtti_isMakeTuple() ) {
+                        auto mkt = static_pointer_cast<ExprMakeTuple>(resExpr);
+                        mkt->recordType = make_smart<TypeDecl>(*expr->recordType);
+                        mkt->makeType.reset();
+                    }
+                    return resExpr;
                 }
-                return resExpr;
             }
             expr->type = resT;
             verifyType(expr->type);

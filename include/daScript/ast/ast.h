@@ -180,6 +180,8 @@ namespace das
         bool isTemp( das_set<Structure *> & dep ) const;
         bool isShareable ( das_set<Structure *> & dep ) const;
         bool hasClasses( das_set<Structure *> & dep ) const;
+        bool hasNonTrivialCtor ( das_set<Structure *> & dep ) const;
+        bool canBePlacedInContainer ( das_set<Structure *> & dep ) const;
         string describe() const { return name; }
         string getMangledName() const;
         bool hasAnyInitializers() const;
@@ -322,6 +324,8 @@ namespace das
         virtual bool isRawPod() const { return false; }
         virtual bool isRefType() const { return false; }
         virtual bool isLocal() const { return false; }
+        virtual bool hasNonTrivialCtor() const { return true; }
+        virtual bool canBePlacedInContainer() const { return false; }
         virtual bool canNew() const { return false; }
         virtual bool canDelete() const { return false; }
         virtual bool needDelete() const { return canDelete(); }
@@ -443,6 +447,7 @@ namespace das
         virtual bool rtti_isMakeLocal() const { return false; }
         virtual bool rtti_isMakeStruct() const { return false; }
         virtual bool rtti_isMakeTuple() const { return false; }
+        virtual bool rtti_isMakeVariant() const { return false; }
         virtual bool rtti_isIfThenElse() const { return false; }
         virtual bool rtti_isFor() const { return false; }
         virtual bool rtti_isWhile() const { return false; }
@@ -675,18 +680,6 @@ namespace das
         return { makeType<RetT>(lib), makeArgumentType<Args>(lib)... };
     }
 
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable:4100)
-#endif
-    template <typename RetT, typename ArgumentsType, size_t... I>
-    __noinline vector<TypeDeclPtr> makeArgs ( const ModuleLibrary & lib, index_sequence<I...> ) {
-        return { makeType<RetT>(lib), makeArgumentType< typename tuple_element<I, ArgumentsType>::type>(lib)... };
-    }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-
     struct TypeInfoMacro : public ptr_ref_count {
         TypeInfoMacro ( const string & n )
             : name(n) {
@@ -784,7 +777,7 @@ namespace das
         static void Shutdown();
         static TypeAnnotation * resolveAnnotation ( const TypeInfo * info );
         static Type findOption ( const string & name );
-        static void foreach(function<bool(Module * module)> && func);
+        static void foreach(const callable<bool(Module * module)> & func);
         virtual uintptr_t rtti_getUserData() {return uintptr_t(0);}
         void verifyAotReady();
         void verifyBuiltinNames(uint32_t flags);
@@ -870,7 +863,7 @@ namespace das
         virtual ~ModuleLibrary() {};
         void addBuiltInModule ();
         void addModule ( Module * module );
-        void foreach ( function<bool (Module * module)> && func, const string & name ) const;
+        void foreach ( const callable<bool (Module * module)> & func, const string & name ) const;
         vector<TypeDeclPtr> findAlias ( const string & name, Module * inWhichModule ) const;
         vector<AnnotationPtr> findAnnotation ( const string & name, Module * inWhichModule ) const;
         vector<TypeInfoMacroPtr> findTypeInfoMacro ( const string & name, Module * inWhichModule ) const;

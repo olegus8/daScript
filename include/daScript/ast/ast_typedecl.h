@@ -101,6 +101,7 @@ namespace das {
         int getVariantSize() const;
         int getVariantAlign() const;
         int getVariantFieldOffset ( int index ) const;
+        int getVariantUniqueFieldIndex ( const TypeDeclPtr & uniqueType ) const;
         string describe ( DescribeExtra extra = DescribeExtra::yes, DescribeContracts contracts = DescribeContracts::yes, DescribeModule module = DescribeModule::yes) const;
         bool canCopy() const;
         bool canMove() const;
@@ -130,6 +131,10 @@ namespace das {
         bool isLocal( das_set<Structure*> & dep ) const;
         bool hasClasses() const;
         bool hasClasses( das_set<Structure*> & dep ) const;
+        bool hasNonTrivialCtor() const;
+        bool hasNonTrivialCtor( das_set<Structure*> & dep ) const;
+        bool canBePlacedInContainer() const;
+        bool canBePlacedInContainer( das_set<Structure*> & dep ) const;
         Type getVectorBaseType() const;
         int getVectorDim() const;
         bool canInitWithZero() const;

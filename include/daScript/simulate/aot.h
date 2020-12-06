@@ -1,6 +1,6 @@
 #pragma once
 
-#include "daScript/misc/function_traits.h"
+#include "daScript/misc/callable.h"
 #include "daScript/simulate/runtime_profile.h"
 #include "daScript/simulate/debug_print.h"
 #include "daScript/simulate/sim_policy.h"
@@ -1452,51 +1452,53 @@ namespace das {
         }
     };
 
-    template <typename Result>
-    struct ImplAotStaticFunction {
-        template <typename FunctionType, typename ArgumentsType, size_t... I>
-        static __forceinline vec4f call(FunctionType && fn, Context & ctx, index_sequence<I...> ) {
-            return cast<Result>::from(
-            fn( cast_aot_arg< typename tuple_element<I, ArgumentsType>::type  >::to ( ctx, ctx.abiArguments()[ I ? I-1 : 0 ] )... ) );
+    template <typename R, typename ...Arg, size_t... I>
+    __forceinline R CallAotStaticFunction ( R (* fn) (Arg...), Context & ctx, index_sequence<I...> ) {
+        return fn(cast_aot_arg<Arg>::to(ctx,ctx.abiArguments()[I?I-1:0])...);
+    }
+
+    template <typename FunctionType>
+    struct ImplAotStaticFunction;
+
+    template <typename R, typename ...Arg>
+    struct ImplAotStaticFunction<R (*)(Arg...)> {
+        static __forceinline vec4f call ( R (*fn) (Arg...), Context & ctx ) {
+            return cast<R>::from(
+                CallAotStaticFunction<R,Arg...>(fn,ctx,make_index_sequence<sizeof...(Arg)>())
+            );
         }
     };
 
-    template <>
-    struct ImplAotStaticFunction<void> {
-        template <typename FunctionType, typename ArgumentsType, size_t... I>
-        static __forceinline vec4f call(FunctionType && fn, Context & ctx, index_sequence<I...> ) {
-            fn( cast_aot_arg< typename tuple_element<I, ArgumentsType>::type  >::to ( ctx, ctx.abiArguments()[ I ? I-1 : 0 ] )... );
+    template <typename ...Arg>
+    struct ImplAotStaticFunction<void (*)(Arg...)> {
+        static __forceinline vec4f call ( void (*fn) (Arg...), Context & ctx ) {
+            CallAotStaticFunction<void,Arg...>(fn,ctx,make_index_sequence<sizeof...(Arg)>());
             return v_zero();
         }
     };
 
-    template <typename Result>
-    struct ImplAotStaticFunctionCMRES {
-        template <typename FunctionType, typename ArgumentsType, size_t... I>
-        static __forceinline Result call(FunctionType && fn, Context & ctx, index_sequence<I...> ) {
-            return fn( cast_aot_arg< typename tuple_element<I, ArgumentsType>::type  >::to ( ctx, ctx.abiArguments()[ I ? I-1 : 0 ] )... );
+    template <typename FunctionType>
+    struct ImplAotStaticFunctionCMRES;
+
+    template <typename R, typename ...Arg>
+    struct ImplAotStaticFunctionCMRES<R (*)(Arg...)> {
+        static __forceinline void call ( R (*fn) (Arg...), Context & ctx ) {
+            using result = typename remove_const<R>::type;
+            *((result *) ctx.abiCMRES) = CallAotStaticFunction<R,Arg...>(fn,ctx,make_index_sequence<sizeof...(Arg)>());
         }
     };
 
     template <typename FuncT, FuncT fn>
     struct SimNode_Aot : SimNode_CallBase {
-        const char * extFnName = nullptr;
         __forceinline SimNode_Aot ( ) : SimNode_CallBase(LineInfo()) {
             aotFunction = (void*) fn;
         }
         virtual vec4f eval ( Context & context ) override {
             DAS_PROFILE_NODE
-            using FunctionTrait = function_traits<FuncT>;
-            using Result = typename FunctionTrait::return_type;
-            using Arguments = typename FunctionTrait::arguments;
-            const int nargs = tuple_size<Arguments>::value;
-            using Indices = make_index_sequence<nargs>;
-            // TODO: sort out interop
             vec4f * aa = context.abiArg;
-            vec4f stub[1] = { v_zero() };
+            vec4f stub[1];
             if ( !aa ) context.abiArg = stub;
-            auto res = ImplAotStaticFunction<Result>::template
-                call<FuncT,Arguments>(*fn, context, Indices());
+            auto res = ImplAotStaticFunction<FuncT>::call(*fn, context);
             context.abiArg = aa;
             context.abiResult() = res;
             return res;
@@ -1505,21 +1507,13 @@ namespace das {
 
     template <typename FuncT, FuncT fn>
     struct SimNode_AotCMRES : SimNode_CallBase {
-        const char * extFnName = nullptr;
         __forceinline SimNode_AotCMRES ( ) : SimNode_CallBase(LineInfo()) {}
         virtual vec4f eval ( Context & context ) override {
             DAS_PROFILE_NODE
-            using FunctionTrait = function_traits<FuncT>;
-            using Result = typename FunctionTrait::return_type;
-            using Arguments = typename FunctionTrait::arguments;
-            const int nargs = tuple_size<Arguments>::value;
-            using Indices = make_index_sequence<nargs>;
             vec4f * aa = context.abiArg;
-            vec4f stub[1] = { v_zero() };
-            if ( !aa ) { context.abiArg = stub; }
-            using ResultValue = typename remove_const<Result>::type;
-            *((ResultValue *)context.abiCMRES) = ImplAotStaticFunctionCMRES<Result>::template
-                call<FuncT,Arguments>(*fn, context, Indices());
+            vec4f stub[1];
+            if ( !aa ) context.abiArg = stub;
+            ImplAotStaticFunctionCMRES<FuncT>::call(*fn, context);
             context.abiArg = aa;
             context.abiResult() = cast<void *>::from(context.abiCMRES);
             return context.abiResult();
@@ -1614,17 +1608,24 @@ namespace das {
         char * EP, * SP;
     };
 
-    template <typename resType, typename ...argType>
-    struct das_make_block : Block, SimNode_ClosureBlock {
-        typedef function < resType ( argType... ) > BlockFn;
-        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-                : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
+    struct das_make_block_base : Block, SimNode_ClosureBlock {
+        das_make_block_base ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi )
+                : SimNode_ClosureBlock(LineInfo(),false,false,ann) {
             stackOffset = context->stack.spi();
             argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
             body = this;
-            aotFunction = &blockFunction;
             functionArguments = context->abiArguments();
             info = fi;
+        }
+    };
+
+    template <typename resType, typename ...argType>
+    struct das_make_block : das_make_block_base {
+        typedef callable < resType ( argType... ) > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
+            aotFunction = &blockFunction;
         };
         template <size_t... I>
         __forceinline resType callBlockFunction(vec4f * args, index_sequence<I...>) {
@@ -1645,16 +1646,12 @@ namespace das {
 #endif
 
     template <typename resType>
-    struct das_make_block<resType> : Block, SimNode_ClosureBlock {
-        typedef function < resType () > BlockFn;
-        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-            : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
-            stackOffset = context->stack.spi();
-            argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
-            body = this;
+    struct das_make_block<resType> : das_make_block_base {
+        typedef callable < resType () > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
             aotFunction = &blockFunction;
-            functionArguments = context->abiArguments();
-            info = fi;
         };
         virtual vec4f eval ( Context & context ) override {
             DAS_PROFILE_NODE
@@ -1664,16 +1661,12 @@ namespace das {
     };
 
     template <>
-    struct das_make_block<void> : Block, SimNode_ClosureBlock {
-        typedef function < void () > BlockFn;
-        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-            : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
-            stackOffset = context->stack.spi();
-            argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
-            body = this;
+    struct das_make_block<void> : das_make_block_base {
+        typedef callable < void () > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
             aotFunction = &blockFunction;
-            functionArguments = context->abiArguments();
-            info = fi;
         };
         virtual vec4f eval ( Context & context ) override {
             DAS_PROFILE_NODE
@@ -1688,17 +1681,13 @@ namespace das {
 #endif
 
     template <typename ...argType>
-    struct das_make_block<void,argType...> : Block, SimNode_ClosureBlock {
-        typedef function < void ( argType... ) > BlockFn;
-        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-                : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
-            stackOffset = context->stack.spi();
-            argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
-            body = this;
+    struct das_make_block<void,argType...> : das_make_block_base {
+        typedef callable < void ( argType... ) > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
             aotFunction = &blockFunction;
-            functionArguments = context->abiArguments();
-            info = fi;
-       };
+        };
         template <size_t... I>
         __forceinline void callBlockFunction(vec4f * args, index_sequence<I...>) {
             blockFunction((cast<argType>::to(args[I]))...);
@@ -1714,16 +1703,12 @@ namespace das {
     };
 
     template <typename resType, typename ...argType>
-    struct das_make_block_cmres : Block, SimNode_ClosureBlock {
-        typedef function < resType ( argType... ) > BlockFn;
-        __forceinline das_make_block_cmres ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-            : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
-            stackOffset = context->stack.spi();
-            argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
-            body = this;
+    struct das_make_block_cmres : das_make_block_base {
+        typedef callable < resType ( argType... ) > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block_cmres ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
             aotFunction = &blockFunction;
-            functionArguments = context->abiArguments();
-            info = fi;
         };
         template <size_t... I>
         __forceinline resType callBlockFunction(vec4f * args, index_sequence<I...>) {
@@ -1742,16 +1727,12 @@ namespace das {
     };
 
     template <typename resType>
-    struct das_make_block_cmres<resType> : Block, SimNode_ClosureBlock {
-        typedef function < resType () > BlockFn;
-        __forceinline das_make_block_cmres ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, BlockFn && func )
-            : SimNode_ClosureBlock(LineInfo(),false,false,ann), blockFunction(func) {
-            stackOffset = context->stack.spi();
-            argumentsOffset = argStackTop ? (context->stack.spi() + argStackTop) : 0;
-            body = this;
+    struct das_make_block_cmres<resType> : das_make_block_base {
+        typedef callable < resType () > BlockFn;
+        template <typename Functor>
+        __forceinline das_make_block_cmres ( Context * context, uint32_t argStackTop, uint64_t ann, FuncInfo * fi, Functor && func )
+                : das_make_block_base(context,argStackTop,ann,fi), blockFunction(func) {
             aotFunction = &blockFunction;
-            functionArguments = context->abiArguments();
-            info = fi;
         };
         virtual vec4f eval ( Context & context ) override {
             DAS_PROFILE_NODE
@@ -1772,7 +1753,7 @@ namespace das {
     struct das_invoke {
         // vector cast
         static __forceinline ResType invoke ( Context * __context__, const Block & blk ) {
-            using BlockFn = function < ResType () >;
+            using BlockFn = callable < ResType () >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
                 return (*fn) ();
@@ -1783,10 +1764,10 @@ namespace das {
         }
         template <typename ...ArgType>
         static __forceinline ResType invoke ( Context * __context__, const Block & blk, ArgType ...arg ) {
-            using BlockFn = function < ResType ( ArgType... ) >;
+            using BlockFn = callable < ResType ( ArgType... ) >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
-                return (*fn) ( arg... );
+                return (*fn) ( forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<ArgType>::from(arg)... };
                 vec4f result = __context__->invoke(blk, arguments, nullptr);
@@ -1795,7 +1776,7 @@ namespace das {
         }
         // cmres
         static __forceinline ResType invoke_cmres ( Context * __context__, const Block & blk ) {
-            using BlockFn = function < ResType () >;
+            using BlockFn = callable < ResType () >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
                 return (*fn) ();
@@ -1807,10 +1788,10 @@ namespace das {
         }
         template <typename ...ArgType>
         static __forceinline ResType invoke_cmres ( Context * __context__, const Block & blk, ArgType ...arg ) {
-            using BlockFn = function < ResType ( ArgType... ) >;
+            using BlockFn = callable < ResType ( ArgType... ) >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
-                return (*fn) ( arg... );
+                return (*fn) ( forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<ArgType>::from(arg)... };
                 typename remove_const<ResType>::type result;
@@ -1820,14 +1801,14 @@ namespace das {
         }
         template <typename BLK, typename ...ArgType>
         static __forceinline ResType invoke_cmres ( Context *, const BLK & blk, ArgType ...arg ) {
-            return blk(arg...);
+            return blk(forward<ArgType>(arg)...);
         }
     };
 
     template <>
     struct das_invoke<void> {
         static __forceinline void invoke ( Context * __context__, const Block & blk ) {
-            using BlockFn = function < void () >;
+            using BlockFn = callable < void () >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
                 (*fn) ();
@@ -1837,10 +1818,10 @@ namespace das {
         }
         template <typename ...ArgType>
         static __forceinline void invoke ( Context * __context__, const Block & blk, ArgType ...arg ) {
-            using BlockFn = function < void ( ArgType... ) >;
+            using BlockFn = callable < void ( ArgType... ) >;
             if ( blk.aotFunction ) {
                 auto fn = (BlockFn *) blk.aotFunction;
-                (*fn) ( arg... );
+                (*fn) ( forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<ArgType>::from(arg)... };
                 __context__->invoke(blk, arguments, nullptr);
@@ -1848,7 +1829,7 @@ namespace das {
         }
         template <typename BLK, typename ...ArgType>
         static __forceinline void invoke ( Context *, const BLK & blk, ArgType ...arg ) {
-            return blk(arg...);
+            return blk(forward<ArgType>(arg)...);
         }
     };
 
@@ -1873,7 +1854,7 @@ namespace das {
             if ( simFunc->aotFunction ) {
                 using fnPtrType = ResType (*) ( Context *, ArgType... );
                 auto fnPtr = (fnPtrType) simFunc->aotFunction;
-                return (*fnPtr) ( __context__, arg... );
+                return (*fnPtr) ( __context__, forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<ArgType>::from(arg)... };
                 vec4f result = __context__->callOrFastcall(simFunc, arguments, 0);
@@ -1900,7 +1881,7 @@ namespace das {
             if ( simFunc->aotFunction ) {
                 using fnPtrType = ResType (*) ( Context *, ArgType... );
                 auto fnPtr = (fnPtrType) simFunc->aotFunction;
-                return (*fnPtr) ( __context__, arg... );
+                return (*fnPtr) ( __context__, forward<ArgType>(arg)... );
             } else {
                 if (!simFunc) __context__->throw_error("invoke null function");
                 typename remove_const<ResType>::type result;
@@ -1953,7 +1934,7 @@ namespace das {
             if ( simFunc->aotFunction ) {
                 using fnPtrType = ResType (*) ( Context *, void *, ArgType... );
                 auto fnPtr = (fnPtrType) simFunc->aotFunction;
-                return (*fnPtr) ( __context__, blk.capture, arg... );
+                return (*fnPtr) ( __context__, blk.capture, forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<void *>::from(blk.capture), (cast<ArgType>::from(arg))... };
                 vec4f result = __context__->callOrFastcall(simFunc, arguments, 0);
@@ -1986,7 +1967,7 @@ namespace das {
             if ( simFunc->aotFunction ) {
                 using fnPtrType = ResType (*) ( Context *, void *, ArgType... );
                 auto fnPtr = (fnPtrType) simFunc->aotFunction;
-                return (*fnPtr) ( __context__, blk.capture, arg... );
+                return (*fnPtr) ( __context__, blk.capture, forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<void *>::from(blk.capture), (cast<ArgType>::from(arg))... };
                 typename remove_const<ResType>::type result;
@@ -2022,7 +2003,7 @@ namespace das {
             if ( simFunc->aotFunction ) {
                 using fnPtrType = void (*) ( Context *, void *, ArgType... );
                 auto fnPtr = (fnPtrType) simFunc->aotFunction;
-                (*fnPtr) ( __context__, blk.capture, arg... );
+                (*fnPtr) ( __context__, blk.capture, forward<ArgType>(arg)... );
             } else {
                 vec4f arguments [] = { cast<void *>::from(blk.capture), (cast<ArgType>::from(arg))... };
                 __context__->callOrFastcall(simFunc, arguments, 0);
