@@ -317,7 +317,8 @@ namespace das {
         // type chain is fully resolved, and not aliased \ auto
         bool isFullySealedType(const TypeDeclPtr & ptr, das_set<const TypeDecl *> & all ) {
             if (!ptr) return false;
-            if ( ptr->baseType==Type::tStructure || ptr->baseType==Type::tTuple || ptr->baseType==Type::tVariant ) {
+            //if ( ptr->baseType==Type::tStructure || ptr->baseType==Type::tTuple || ptr->baseType==Type::tVariant ) {
+            if ( true ) {
                 auto thisType = ptr.get();
                 if ( all.find(thisType)!=all.end() ) return true;
                 all.insert(thisType);
@@ -1364,9 +1365,9 @@ namespace das {
                 }
             }
             // TODO: verify. correct test is in fact the one bellow
-            //  if ( isFullySealedType(decl.type) ) {
+            if ( isFullySealedType(decl.type) ) {
             // but the auto \ alias test may be sufficient
-            if ( !decl.type->isAutoOrAlias() ) {
+            //if ( !decl.type->isAutoOrAlias() ) {
                 int fieldAlignemnt = decl.type->getAlignOf();
                 int fa = fieldAlignemnt - 1;
                 if ( cppLayout ) {
