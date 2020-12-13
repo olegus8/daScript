@@ -1364,9 +1364,9 @@ namespace das {
                 }
             }
             // TODO: verify. correct test is in fact the one bellow
-            if ( isFullySealedType(decl.type) ) {
+            //  if ( isFullySealedType(decl.type) ) {
             // but the auto \ alias test may be sufficient
-            //if ( !decl.type->isAutoOrAlias() ) {
+            if ( !decl.type->isAutoOrAlias() ) {
                 int fieldAlignemnt = decl.type->getAlignOf();
                 int fa = fieldAlignemnt - 1;
                 if ( cppLayout ) {
