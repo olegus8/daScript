@@ -317,8 +317,7 @@ namespace das {
         // type chain is fully resolved, and not aliased \ auto
         bool isFullySealedType(const TypeDeclPtr & ptr, das_set<const TypeDecl *> & all ) {
             if (!ptr) return false;
-            //if ( ptr->baseType==Type::tStructure || ptr->baseType==Type::tTuple || ptr->baseType==Type::tVariant ) {
-            if ( true ) {
+            if ( ptr->baseType==Type::tStructure || ptr->baseType==Type::tTuple || ptr->baseType==Type::tVariant ) {
                 auto thisType = ptr.get();
                 if ( all.find(thisType)!=all.end() ) return true;
                 all.insert(thisType);
