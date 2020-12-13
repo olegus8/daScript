@@ -36,16 +36,6 @@ def test_native
     b?.fooPtr?.fooData ?? idummy = 4
     assert(b.fooPtr.fooData==4 && idummy==3)
 
-struct MyStruct
-    e : EntityId
-
-[sideeffects]
-def test_managed
-    var a = [[EntityId]]
-    var b = [[MyStruct]]
-    b.e = a
-    var c = [[MyStruct e = a]]
-
 [sideeffects]
 def test_handled
     var a:TestObjectFoo?
@@ -78,8 +68,22 @@ def test_handled
         delete b
 
 [export]
+def test_fancy_container(var a : array<FancyClass>)
+    print("a = {a}\n")
+
+def test_fancy
+    var fc0 = FancyClass()
+    assert(fc0.value==13)
+    var fc = FancyClass(1,2)
+    assert(fc.value==3)
+    using() <| $( var f : FancyClass# )
+        assert(f.value==13)
+    using(1,3) <| $( var f : FancyClass# )
+        assert(f.value==4)
+
+[export]
 def test:bool
     test_native()
     test_handled()
-    test_managed()
+    test_fancy()
     return true
