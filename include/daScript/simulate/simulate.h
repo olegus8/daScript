@@ -1,6 +1,5 @@
 #pragma once
 
-#include <setjmp.h>
 #include "daScript/misc/vectypes.h"
 #include "daScript/misc/type_name.h"
 #include "daScript/misc/arraytype.h"
@@ -16,9 +15,11 @@ namespace das
     #define DAS_BIND_FUN(a)                     decltype(&a), a
     #define DAS_BIND_PROP(BIGTYPE,FIELDNAME)    decltype(&BIGTYPE::FIELDNAME), &BIGTYPE::FIELDNAME
 
-    template <class T, class M> M get_member_type(M T:: *);
-    #define GET_TYPE_OF(mem) decltype(das::get_member_type(mem))
-    #define DAS_BIND_FIELD(BIGTYPE,FIELDNAME)   GET_TYPE_OF(&BIGTYPE::FIELDNAME),offsetof(BIGTYPE,FIELDNAME)
+    #define DAS_BIND_FIELD(BIGTYPE,FIELDNAME)   decltype(das::declval<BIGTYPE>().FIELDNAME), offsetof(BIGTYPE,FIELDNAME)
+
+    #ifndef DAS_ENABLE_SMART_PTR_TRACKING
+    #define DAS_ENABLE_SMART_PTR_TRACKING   0
+    #endif
 
     #ifndef DAS_ENABLE_STACK_WALK
     #define DAS_ENABLE_STACK_WALK   1
@@ -28,7 +29,7 @@ namespace das
     #define DAS_ENABLE_EXCEPTIONS   0
     #endif
 
-    #define MAX_FOR_ITERATORS   32
+    #define MAX_FOR_ITERATORS   8
 
     #if DAS_ENABLE_PROFILER
         #define DAS_PROFILE_NODE    profileNode(this);
@@ -212,6 +213,8 @@ namespace das
     void installDebugAgent ( DebugAgentPtr );
     void tickDebugAgent ( );
 
+    void dumpTrackingLeaks();
+
     class Context {
         template <typename TT> friend struct SimNode_GetGlobalR2V;
         friend struct SimNode_GetGlobal;
@@ -285,7 +288,7 @@ namespace das
 
         vec4f evalWithCatch ( SimFunction * fnPtr, vec4f * args = nullptr, void * res = nullptr );
         vec4f evalWithCatch ( SimNode * node );
-        bool  runWithCatch ( const function<void()> & subexpr );
+        bool  runWithCatch ( const callable<void()> & subexpr );
 
         DAS_NORETURN_PREFIX void throw_error ( const char * message ) DAS_NORETURN_SUFFIX;
         DAS_NORETURN_PREFIX void throw_error_ex ( const char * message, ... ) DAS_NORETURN_SUFFIX;
@@ -637,6 +640,10 @@ namespace das
         uint32_t stopFlags = 0;
         uint32_t gotoLabel = 0;
         vec4f result;
+    public:
+#if DAS_ENABLE_SMART_PTR_TRACKING
+        static vector<smart_ptr<ptr_ref_count>> sptrAllocations;
+#endif
     };
 
     void tickDebugAgent ( );
@@ -767,9 +774,9 @@ __forceinline void profileNode ( SimNode * node ) {
                 argValues[i] = arguments[i]->eval(context);
             }
         }
-        SimNode * visitOp1 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
-        SimNode * visitOp2 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
-        SimNode * visitOp3 ( SimVisitor & vis, const char * op, int typeSize, const string & typeName );
+        SimNode * visitOp1 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
+        SimNode * visitOp2 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
+        SimNode * visitOp3 ( SimVisitor & vis, const char * op, int typeSize, const char * typeName );
 #define EVAL_NODE(TYPE,CTYPE)\
         virtual CTYPE eval##TYPE ( Context & context ) override {   \
             return cast<CTYPE>::to(eval(context));                  \

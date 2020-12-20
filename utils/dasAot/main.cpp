@@ -20,7 +20,8 @@ void operator delete(void * p) throw()
 #endif
 
 static bool quiet = false;
-static bool json = false;
+
+static bool paranoid_validation = false;
 
 TextPrinter tout;
 
@@ -40,47 +41,22 @@ bool saveToFile ( const string & fname, const string & str ) {
 bool compile ( const string & fn, const string & cppFn ) {
     auto access = get_file_access(nullptr);
     ModuleGroup dummyGroup;
-    bool firstError = true;
     CodeOfPolicies policies;
     policies.fail_on_lack_of_aot_export = true;
     if ( auto program = compileDaScript(fn,access,tout,dummyGroup,false,policies) ) {
         if ( program->failed() ) {
-            if (json)
-                tout << "{ \"result\": \"failed to compile\",\n\"diagnostics\": [\n";
-            else
-                tout << "failed to compile\n";
+            tout << "failed to compile\n";
             for ( auto & err : program->errors ) {
-                if (json) {
-                    if (!firstError)
-                        tout << ",\n";
-                    firstError = false;
-                    tout << reportErrorJson(err.at, err.what, err.extra, err.fixme, err.cerr);
-                } else {
-                    tout << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
-                }
+                tout << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
             }
-            if (json)
-                tout << "]\n}";
             return false;
         } else {
             Context ctx(program->getContextStackSize());
             if ( !program->simulate(ctx, tout) ) {
-                if (json)
-                    tout << "{ \"result\": \"failed to simulate\",\n\"diagnostics\": [\n";
-                else
-                    tout << "failed to simulate\n";
+                tout << "failed to simulate\n";
                 for ( auto & err : program->errors ) {
-                    if (json) {
-                        if (!firstError)
-                            tout << ",\n";
-                        firstError = false;
-                        tout << reportErrorJson(err.at, err.what, err.extra, err.fixme, err.cerr);
-                    } else {
-                        tout << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
-                    }
+                    tout << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
                 }
-                if (json)
-                    tout << "]\n}";
                 return false;
             }
             // AOT time
@@ -146,6 +122,7 @@ bool compile ( const string & fn, const string & cppFn ) {
                 tw << "#pragma GCC diagnostic ignored \"-Wreturn-local-addr\"\n";
                 tw << "#pragma GCC diagnostic ignored \"-Wignored-qualifiers\"\n";
                 tw << "#pragma GCC diagnostic ignored \"-Wsign-compare\"\n";
+                tw << "#pragma GCC diagnostic ignored \"-Wsubobject-linkage\"\n";
                 tw << "#endif\n";
                 tw << "#if defined(__clang__)\n";
                 tw << "#pragma clang diagnostic push\n";
@@ -157,15 +134,20 @@ bool compile ( const string & fn, const string & cppFn ) {
                 tw << "#endif\n";
                 tw << "\n";
                 tw << "namespace das {\n";
-                tw << "namespace {\n"; // anonymous
+                tw << "namespace " << program->thisNamespace << " {\n"; // anonymous
                 program->aotCpp(ctx, tw);
                 // list STUFF
-                tw << "struct AotList_impl : AotListBase {\n";
-                tw << "\tvirtual void registerAotFunctions ( AotLibrary & aotLib ) override {\n";
+                tw << "\tstatic void registerAotFunctions ( AotLibrary & aotLib ) {\n";
                 program->registerAotCpp(tw, ctx, false);
                 tw << "\t};\n";
-                tw << "};\n";
-                tw << "AotList_impl impl;\n";
+                tw << "\n";
+                tw << "AotListBase impl(registerAotFunctions);\n";
+                // validation stuff
+                if ( paranoid_validation ) {
+                    program->validateAotCpp(tw,ctx);
+                    tw << "\n";
+                }
+                // footter
                 tw << "}\n";
                 tw << "}\n";
                 tw << "#if defined(_MSC_VER)\n";
@@ -205,8 +187,8 @@ int MAIN_FUNC_NAME(int argc, char * argv[]) {
         for (int ai = 3; ai != argc; ++ai) {
             if ( strcmp(argv[ai],"-q")==0 ) {
                 quiet = true;
-            } else if ( strcmp(argv[ai],"-j")==0 ) {
-                json = true;
+            } else if ( strcmp(argv[ai],"-p")==0 ) {
+                paranoid_validation = true;
             } else if ( strcmp(argv[ai],"--")==0 ) {
                 scriptArgs = true;
             } else if ( !scriptArgs ) {

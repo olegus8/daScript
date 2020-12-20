@@ -405,7 +405,7 @@ namespace das
             stream << " explicit";
         }
         if ( explicitConst ) {
-            stream << "!";
+            stream << " =const";
         }
         if (contracts == DescribeContracts::yes) {
             if (removeConstant || removeRef || removeDim || removeTemporary) {
@@ -521,6 +521,30 @@ namespace das
         } else if ( baseType==Type::tLambda ) {
             return true;
         } else if ( baseType==Type::tIterator ) {
+            return true;
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    bool TypeDecl::canDeletePtr() const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->canDeletePtr();
+        } else if ( baseType==Type::tStructure ) {
+            return true;
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    bool TypeDecl::canNew() const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->canNew();
+        } else if ( baseType==Type::tStructure ) {
             return true;
         } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
             return true;
@@ -777,13 +801,124 @@ namespace das
         return ss.str();
     }
 
+    bool TypeDecl::canBePlacedInContainer() const {
+        das_set<Structure *> dep;
+        return canBePlacedInContainer(dep);
+    }
+
+    bool TypeDecl::canBePlacedInContainer(das_set<Structure *> & dep) const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->canBePlacedInContainer();
+        } else if ( baseType==Type::tStructure ) {
+            if (structType) {
+                if (dep.find(structType) != dep.end()) return true;
+                dep.insert(structType);
+                return structType->canBePlacedInContainer(dep);
+            }
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            for ( const auto & arg : argTypes ) {
+                if ( !arg->canBePlacedInContainer(dep) ) {
+                    return false;
+                }
+            }
+            return true;
+        } else if ( baseType==Type::tBlock ) {
+            return false;
+        } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
+            if ( firstType && !firstType->canBePlacedInContainer(dep) ) return false;
+            if ( secondType && !secondType->canBePlacedInContainer(dep) ) return false;
+        }
+        return true;
+    }
+
+    bool TypeDecl::hasNonTrivialCtor() const {
+        das_set<Structure *> dep;
+        return hasNonTrivialCtor(dep);
+    }
+
+    bool TypeDecl::hasNonTrivialCtor(das_set<Structure *> & dep) const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->hasNonTrivialCtor();
+        } else if ( baseType==Type::tStructure ) {
+            if (structType) {
+                if (dep.find(structType) != dep.end()) return false;
+                dep.insert(structType);
+                return structType->hasNonTrivialCtor(dep);
+            }
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            for ( const auto & arg : argTypes ) {
+                if ( arg->hasNonTrivialCtor(dep) ) {
+                    return true;
+                }
+            }
+        } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
+            if ( firstType && firstType->hasNonTrivialCtor(dep) ) return true;
+            if ( secondType && secondType->hasNonTrivialCtor(dep) ) return true;
+        }
+        return false;
+    }
+
+    bool TypeDecl::hasNonTrivialDtor() const {
+        das_set<Structure *> dep;
+        return hasNonTrivialDtor(dep);
+    }
+
+    bool TypeDecl::hasNonTrivialDtor(das_set<Structure *> & dep) const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->hasNonTrivialDtor();
+        } else if ( baseType==Type::tStructure ) {
+            if (structType) {
+                if (dep.find(structType) != dep.end()) return false;
+                dep.insert(structType);
+                return structType->hasNonTrivialDtor(dep);
+            }
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            for ( const auto & arg : argTypes ) {
+                if ( arg->hasNonTrivialDtor(dep) ) {
+                    return true;
+                }
+            }
+        } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
+            if ( firstType && firstType->hasNonTrivialDtor(dep) ) return true;
+            if ( secondType && secondType->hasNonTrivialDtor(dep) ) return true;
+        }
+        return false;
+    }
+
+    bool TypeDecl::hasNonTrivialCopy() const {
+        das_set<Structure *> dep;
+        return hasNonTrivialCopy(dep);
+    }
+
+    bool TypeDecl::hasNonTrivialCopy(das_set<Structure *> & dep) const {
+        if ( baseType==Type::tHandle ) {
+            return annotation->hasNonTrivialCopy();
+        } else if ( baseType==Type::tStructure ) {
+            if (structType) {
+                if (dep.find(structType) != dep.end()) return false;
+                dep.insert(structType);
+                return structType->hasNonTrivialCopy(dep);
+            }
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+            for ( const auto & arg : argTypes ) {
+                if ( arg->hasNonTrivialCopy(dep) ) {
+                    return true;
+                }
+            }
+        } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
+            if ( firstType && firstType->hasNonTrivialCopy(dep) ) return true;
+            if ( secondType && secondType->hasNonTrivialCopy(dep) ) return true;
+        }
+        return false;
+    }
+
     bool TypeDecl::hasClasses() const {
         das_set<Structure *> dep;
         return hasClasses(dep);
     }
 
     bool TypeDecl::hasClasses(das_set<Structure *> & dep) const {
-        if ( isStructure() ) {
+        if ( baseType==Type::tStructure ) {
             if (structType) {
                 if (dep.find(structType) != dep.end()) return false;
                 dep.insert(structType);
@@ -796,8 +931,8 @@ namespace das
                 }
             }
         } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
-            if ( firstType && firstType->hasClasses() ) return true;
-            if ( secondType && secondType->hasClasses() ) return true;
+            if ( firstType && firstType->hasClasses(dep) ) return true;
+            if ( secondType && secondType->hasClasses(dep) ) return true;
         }
         return false;
     }
@@ -808,9 +943,9 @@ namespace das
     }
 
     bool TypeDecl::isLocal(das_set<Structure *> & dep) const {
-        if ( isHandle() ) {
+        if ( baseType==Type::tHandle ) {
             return annotation->isLocal();
-        } else if ( isStructure() ) {
+        } else  if ( baseType==Type::tStructure ) {
             if (structType) {
                 if (dep.find(structType) != dep.end()) return true;
                 dep.insert(structType);
@@ -818,38 +953,24 @@ namespace das
             } else {
                 return true;
             }
-        } else if ( isPointer() ) {
-            return true;
-        } else if ( isIterator() ) {
-            return true;
-        }
-        if ( firstType && !firstType->isLocal(dep) ) {
-            return false;
-        }
-        if ( secondType && !secondType->isLocal(dep) ) {
-            return false;
-        }
-        if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
+        } else if ( baseType==Type::tTuple || baseType==Type::tVariant ) {
             for ( const auto & arg : argTypes ) {
                 if ( !arg->isLocal(dep) ) {
                     return false;
                 }
             }
+            return true;
+        } else if ( baseType==Type::tBlock ) {
+            return false;
+        } else if ( baseType==Type::tArray || baseType==Type::tTable ) {
+            if ( firstType && !firstType->isLocal(dep) ) return false;
+            if ( secondType && !secondType->isLocal(dep) ) return false;
         }
         return true;
     }
 
-    bool TypeDecl::isConst() const
-    {
+    bool TypeDecl::isConst() const {
         return constant;
-        /*
-        if ( constant )
-            return true;
-        if ( baseType==Type::tPointer )
-            if ( firstType && firstType->constant )
-                return true;
-        return false;
-        */
     }
 
     void TypeDecl::sanitize ( ) {
@@ -879,6 +1000,8 @@ namespace das
             if ( !isExplicit && (allowSubstitute == AllowSubstitute::yes) ) {
                 if ( annotation->canSubstitute(decl.annotation) ) {
                     return true;
+                } else if ( decl.annotation->canBeSubstituted(annotation) ) {
+                    return true;
                 }
             }
             return false;
@@ -897,6 +1020,7 @@ namespace das
             }
             bool iAmVoid = !firstType || firstType->isVoid();
             bool heIsVoid = !decl.firstType || decl.firstType->isVoid();
+            TemporaryMatters tpm = implicit ? TemporaryMatters::no : TemporaryMatters::yes;
             if ( topLevel ) {
                 ConstMatters pcm = ConstMatters::yes;
                 if ( isPassType && firstType && firstType->constant ) {
@@ -904,13 +1028,13 @@ namespace das
                 }
                 if ( !iAmVoid && !heIsVoid &&
                         !firstType->isSameType(*decl.firstType,RefMatters::yes,pcm,
-                            TemporaryMatters::yes,isExplicit ? AllowSubstitute::no : allowSubstitute,false) ) {
+                            tpm, isExplicit ? AllowSubstitute::no : allowSubstitute,false) ) {
                     return false;
                 }
             } else {
                 if ( !iAmVoid && !heIsVoid ) {
                     if ( !firstType->isSameType(*decl.firstType,RefMatters::yes,ConstMatters::yes,
-                                TemporaryMatters::yes,isExplicit ? AllowSubstitute::no : allowSubstitute,false) ) {
+                                tpm, isExplicit ? AllowSubstitute::no : allowSubstitute,false) ) {
                         return false;
                     }
                 } else {
@@ -1236,6 +1360,38 @@ namespace das
             for ( auto & arg : argTypes )
                 arg->collectAliasList(aliases);
         }
+    }
+
+    bool TypeDecl::isAotAlias () const {
+        if ( aotAlias ) {
+            return true;
+        } else  if ( baseType==Type::tPointer ) {
+            if ( firstType )
+                return firstType->isAotAlias();
+        } else  if ( baseType==Type::tIterator ) {
+            if ( firstType )
+                return firstType->isAotAlias();
+        } else if ( baseType==Type::tArray ) {
+            if ( firstType )
+                return firstType->isAotAlias();
+        } else if ( baseType==Type::tTable ) {
+            bool any = false;
+            if ( firstType )
+                any |= firstType->isAotAlias();
+            if ( secondType )
+                any |= secondType->isAotAlias();
+            return any;
+        } else if ( baseType==Type::tBlock || baseType==Type::tFunction ||
+                   baseType==Type::tLambda || baseType==Type::tTuple ||
+                   baseType==Type::tVariant ) {
+            bool any = false;
+            if ( firstType )
+                any |= firstType->isAotAlias();
+            for ( auto & arg : argTypes )
+                any |= arg->isAotAlias();
+            return any;
+        }
+        return false;
     }
 
     bool TypeDecl::isAlias() const {
@@ -1804,6 +1960,22 @@ namespace das
         int al = getVariantAlign() - 1;
         int offset = (getTypeBaseSize(Type::tInt) + al) & ~al;
         return offset;
+    }
+
+    int TypeDecl::getVariantUniqueFieldIndex ( const TypeDeclPtr & uniqueType ) const {
+        int index = -1;
+        int idx = 0;
+        for ( const auto & argT : argTypes ) {
+            if ( argT->isSameType(*uniqueType, RefMatters::no, ConstMatters::no, TemporaryMatters::no, AllowSubstitute::yes) ) {
+                if ( index != -1 ) {
+                    return -1;
+                } else {
+                    index = idx;
+                }
+            }
+            idx ++;
+        }
+        return index;
     }
 
     int TypeDecl::getVariantSize() const {

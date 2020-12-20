@@ -9,7 +9,7 @@ namespace das {
     void builtin_print ( char * text, Context * context );
     vec4f builtin_sprint ( Context & context, SimNode_CallBase * call, vec4f * args );
     vec4f builtin_breakpoint ( Context & context, SimNode_CallBase * call, vec4f * );
-    void builtin_stackwalk ( Context * context, LineInfoArg * lineInfo );
+    void builtin_stackwalk ( bool args, bool vars, Context * context, LineInfoArg * lineInfo );
     void builtin_terminate ( Context * context );
     int builtin_table_size ( const Table & arr );
     int builtin_table_capacity ( const Table & arr );
@@ -31,6 +31,7 @@ namespace das {
     void builtin_array_lock ( const Array & arr, Context * context );
     void builtin_array_unlock ( const Array & arr, Context * context );
     void builtin_array_clear_lock ( const Array & arr, Context * );
+    void builtin_temp_array ( void * data, int size, const Block & block, Context * context );
     void builtin_array_free ( Array & dim, int szt, Context * __context__ );
     void builtin_table_free ( Table & tab, int szk, int szv, Context * __context__ );
 

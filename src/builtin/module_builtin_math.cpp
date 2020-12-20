@@ -39,6 +39,12 @@ namespace das {
       IMPLEMENT_OP2_EVAL_FUNCTION_POLICY(fun, int3);     \
       IMPLEMENT_OP2_EVAL_FUNCTION_POLICY(fun, int4);
 
+#define MATH_FUN_OP3I(fun)\
+      IMPLEMENT_OP3_FUNCTION_POLICY(fun,Int,int32_t);\
+      IMPLEMENT_OP3_EVAL_FUNCTION_POLICY(fun, int2);     \
+      IMPLEMENT_OP3_EVAL_FUNCTION_POLICY(fun, int3);     \
+      IMPLEMENT_OP3_EVAL_FUNCTION_POLICY(fun, int4);
+
 #define MATH_FUN_OP3(fun)\
       DEFINE_POLICY(fun);\
       IMPLEMENT_OP3_FUNCTION_POLICY(fun,Float,float);\
@@ -54,9 +60,18 @@ namespace das {
     IMPLEMENT_OP2_FUNCTION_POLICY(fun,UInt64,uint64_t); \
     IMPLEMENT_OP2_FUNCTION_POLICY(fun,Double,double);
 
+#define MATH_FUN_OP3A(fun)                              \
+    MATH_FUN_OP3(fun);                                  \
+    MATH_FUN_OP3I(fun);                                 \
+    IMPLEMENT_OP3_FUNCTION_POLICY(fun,UInt,uint32_t);   \
+    IMPLEMENT_OP3_FUNCTION_POLICY(fun,Int64,int64_t);   \
+    IMPLEMENT_OP3_FUNCTION_POLICY(fun,UInt64,uint64_t); \
+    IMPLEMENT_OP3_FUNCTION_POLICY(fun,Double,double);
+
     // everything
     MATH_FUN_OP2A(Min)
     MATH_FUN_OP2A(Max)
+    MATH_FUN_OP3A(Clamp)
 
     //common
     MATH_FUN_OP1(Abs)
@@ -66,7 +81,6 @@ namespace das {
     MATH_FUN_OP1(RSqrt)
     MATH_FUN_OP1(RSqrtEst)
     MATH_FUN_OP1(Sat)
-    MATH_FUN_OP3(Clamp)
     MATH_FUN_OP3(Mad)
     MATH_FUN_OP3(Lerp)
 
@@ -116,8 +130,9 @@ namespace das {
 
     template <typename TT>
     void addFunctionCommonTyped(Module & mod, const ModuleLibrary & lib) {
-        mod.addFunction( make_smart<BuiltInFn<Sim_Min <TT>, TT,   TT,   TT>   >("min", lib, "Min")->args({"x","y"}) );
-        mod.addFunction( make_smart<BuiltInFn<Sim_Max <TT>, TT,   TT,   TT>   >("max", lib, "Max")->args({"x","y"}) );
+        mod.addFunction( make_smart<BuiltInFn<Sim_Min <TT>, TT,   TT,   TT>      >("min",   lib, "Min")->args({"x","y"}) );
+        mod.addFunction( make_smart<BuiltInFn<Sim_Max <TT>, TT,   TT,   TT>      >("max",   lib, "Max")->args({"x","y"}) );
+        mod.addFunction( make_smart<BuiltInFn<Sim_Clamp<TT>,TT,   TT,   TT,  TT> >("clamp", lib, "Clamp")->args({"t","a","b"}) );
     }
 
     template <typename TT>
@@ -155,9 +170,8 @@ namespace das {
     template <typename TT>
     void addFunctionOp3(Module & mod, const ModuleLibrary & lib) {
         //                                     policy         ret arg1 arg2 arg3   name
-        mod.addFunction( make_smart<BuiltInFn<Sim_Lerp<TT>,  TT, TT,  TT,  TT> >("lerp",  lib, "Lerp")->args({"a","b","t"}) );
-        mod.addFunction( make_smart<BuiltInFn<Sim_Clamp<TT>, TT, TT,  TT,  TT> >("clamp", lib, "Clamp")->args({"t","a","b"}) );
         mod.addFunction( make_smart<BuiltInFn<Sim_Mad<TT>,   TT, TT,  TT,  TT> >("mad",   lib, "Mad")->args({"a","b","c"}) );
+        mod.addFunction( make_smart<BuiltInFn<Sim_Lerp<TT>,  TT, TT,  TT,  TT> >("lerp",  lib, "Lerp")->args({"a","b","t"}) );
     }
 
     template <typename VecT, int RowC>
@@ -194,6 +208,9 @@ namespace das {
         }
         virtual bool isRefType() const override { return true; }
         virtual bool isLocal() const override { return true; }
+        virtual bool canBePlacedInContainer() const override { return true; }
+        virtual bool hasNonTrivialCtor() const override { return false; }
+        virtual bool hasNonTrivialDtor() const override { return false; }
         virtual bool canMove() const override { return true; }
         virtual bool canCopy() const override { return true; }
         virtual bool canClone() const override { return true; }
@@ -251,7 +268,7 @@ namespace das {
             int field = GetField(na);
             if ( field!=-1 ) {
                 if ( !value->type->isPointer() ) {
-                    auto tnode = value->trySimulate(context, field*sizeof(VecT), Type::none);
+                    auto tnode = value->trySimulate(context, field*sizeof(VecT), make_smart<TypeDecl>(Type::none));
                     if ( tnode ) {
                         return tnode;
                     }
@@ -269,7 +286,7 @@ namespace das {
             if ( field!=-1 ) {
                 auto bt = TypeDecl::getVectorType(Type::tFloat, ColC);
                 if ( !value->type->isPointer() ) {
-                    auto tnode = value->trySimulate(context, field*sizeof(VecT), bt);
+                    auto tnode = value->trySimulate(context, field*sizeof(VecT), make_smart<TypeDecl>(bt));
                     if ( tnode ) {
                         return tnode;
                     }
@@ -312,7 +329,7 @@ namespace das {
             }
         };
         SimNode * trySimulate ( Context & context, const ExpressionPtr & subexpr, const ExpressionPtr & index,
-                               Type r2vType, uint32_t ofs ) const {
+                               const TypeDeclPtr & r2vType, uint32_t ofs ) const {
             if ( index->rtti_isConstant() ) {
                 // if its constant index, like a[3]..., we try to let node bellow simulate
                 auto idxCE = static_pointer_cast<ExprConst>(index);
@@ -332,7 +349,7 @@ namespace das {
         }
         virtual SimNode * simulateGetAt ( Context & context, const LineInfo & at, const TypeDeclPtr &,
                                          const ExpressionPtr & rv, const ExpressionPtr & idx, uint32_t ofs ) const override {
-            if ( auto tnode = trySimulate(context, rv, idx, Type::none, ofs) ) {
+            if ( auto tnode = trySimulate(context, rv, idx, make_smart<TypeDecl>(Type::none), ofs) ) {
                 return tnode;
             } else {
                 return context.code->makeNode<SimNode_At>(at,
@@ -344,7 +361,7 @@ namespace das {
         virtual SimNode * simulateGetAtR2V ( Context & context, const LineInfo & at, const TypeDeclPtr &,
                                             const ExpressionPtr & rv, const ExpressionPtr & idx, uint32_t ofs ) const override {
             Type r2vType = (Type) ToBasicType<VecT>::type;
-            if ( auto tnode = trySimulate(context, rv, idx, r2vType, ofs) ) {
+            if ( auto tnode = trySimulate(context, rv, idx, make_smart<TypeDecl>(r2vType), ofs) ) {
                 return tnode;
             } else {
                 return context.code->makeValueNode<SimNode_AtR2V>(  r2vType, at,
@@ -575,6 +592,11 @@ namespace das {
                 "inverse", SideEffects::none, "float3x4_inverse")->arg("x");
             addExtern<DAS_BIND_FUN(rotate)>(*this, lib, "rotate",
                 SideEffects::none, "rotate")->args({"x","y"});
+            // packing
+            addExtern<DAS_BIND_FUN(pack_float_to_byte)>(*this, lib, "pack_float_to_byte",
+                SideEffects::none,"pack_float_to_byte")->arg("x");
+            addExtern<DAS_BIND_FUN(unpack_byte_to_float)>(*this, lib, "unpack_byte_to_float",
+                SideEffects::none,"unpack_byte_to_float")->arg("x");
             // lets make sure its all aot ready
             verifyAotReady();
         }

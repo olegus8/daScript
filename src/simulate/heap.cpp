@@ -91,7 +91,7 @@ namespace das {
         }
     }
 
-    void PersistentStringAllocator::forEachString ( const function<void (const char *)> & fn ) {
+    void PersistentStringAllocator::forEachString ( const callable<void (const char *)> & fn ) {
         for ( uint32_t si=0; si!=DAS_MAX_SHOE_CUNKS; ++si ) {
             for ( auto ch=model.shoe.chunks[si]; ch; ch=ch->next ) {
                 uint32_t utotal = ch->total / 32;
@@ -145,7 +145,9 @@ namespace das {
     void StringHeapAllocator::recognize ( char * str ) {
         if ( !str ) return;
         uint32_t length = uint32_t(strlen(str));
-        if ( needIntern && isOwnPtr(str, length+1) ) {
+        uint32_t size = length + 1;
+        size = (size + 15) & ~15;
+        if ( needIntern && isOwnPtr(str, size) ) {
             internMap.insert(StrHashEntry(str,length));
         }
     }
@@ -293,7 +295,7 @@ namespace das {
         }
     }
 
-    void LinearStringAllocator::forEachString ( const function<void (const char *)> & fn ) {
+    void LinearStringAllocator::forEachString ( const callable<void (const char *)> & fn ) {
         for ( auto ch=model.chunk; ch; ch=ch->next ) {
             char * tail = ch->data + ch->offset;
             for ( char * txt = ch->data; txt!=tail; ) {

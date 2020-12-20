@@ -26,12 +26,13 @@ namespace das {
         return (ch>='0' && ch<='9') || (ch>='a' && ch<='z') || (ch>='A' && ch<='Z');
     }
 
-    vector<string> getAllRequie ( const char * src, uint32_t length ) {
+    void getAllRequireReq ( FileInfo * fi, const FileAccessPtr & access, vector<string> & req, das_set<FileInfo *> & collected  ) {
+        const char * src = fi->source;
+        uint32_t length = fi->sourceLength;
         if ( isUtf8Text(src,length) ) { // skip utf8 byte order mark
             src += 3;
             length -= 3;
         }
-        vector<string> req;
         const char * src_end = src + length;
         bool wb = true;
         while ( src < src_end ) {
@@ -66,8 +67,10 @@ namespace das {
                 src +=2;
                 wb = true;
                 continue;
-            } else if ( wb && ((src+8)<src_end) && src[0]=='r') {   // need space for 'require '
-                if ( memcmp(src, "require", 7)==0 ) {
+            } else if ( wb && ((src+8)<src_end) && (src[0]=='r' || src[0]=='i') ) {   // need space for 'require ' || 'include '
+                bool isReq = memcmp(src, "require", 7)==0;
+                bool isInc = !isReq && (memcmp(src, "include", 7)==0);
+                if ( isReq || isInc ) {
                     src += 7;
                     if ( isspace(src[0]) ) {
                         while ( src < src_end && isspace(src[0]) ) {
@@ -81,7 +84,18 @@ namespace das {
                             while ( src < src_end && (isalnumE(src[0]) || src[0]=='_' || src[0]=='.' || src[0]=='/') ) {
                                 mod += *src ++;
                             }
-                            req.push_back(mod);
+                            if ( isReq ) {
+                                req.push_back(mod);
+                            } else if ( isInc ) {
+                                string incFileName = access->getIncludeFileName(fi->name,mod);
+                                auto info = access->getFileInfo(incFileName);
+                                if ( info ) {
+                                    if ( collected.find(info)==collected.end() ) {
+                                        collected.insert(info);
+                                        getAllRequireReq(info, access, req, collected);
+                                    }
+                                }
+                            }
                             continue;
                         } else {
                             wb = true;
@@ -99,6 +113,12 @@ namespace das {
             wb = src[0]!='_' && (wb ? !isalnumE(src[0]) : !isalphaE(src[0]));
             src ++;
         }
+    }
+
+    vector<string> getAllRequire ( FileInfo * fi, const FileAccessPtr & access  ) {
+        das_set<FileInfo *> collected;
+        vector<string> req;
+        getAllRequireReq(fi, access, req, collected);
         return req;
     }
 
@@ -126,7 +146,7 @@ namespace das {
                           int tab ) {
         if ( auto fi = access->getFileInfo(fileName) ) {
             log << string(tab,'\t') << "in " << fileName << "\n";
-            vector<string> ownReq = getAllRequie(fi->source, fi->sourceLength);
+            vector<string> ownReq = getAllRequire(fi, access);
             for ( auto & mod : ownReq ) {
                 log << string(tab,'\t') << "require " << mod << "\n";
                 auto module = Module::require(mod); // try native with that name
@@ -136,32 +156,41 @@ namespace das {
                         mod = info.moduleName;
                         log << string(tab,'\t') << " resolved as " << mod << "\n";
                     }
-                    auto it_r = find_if(req.begin(), req.end(), [&] ( const ModuleInfo & reqM ) {
-                        return reqM.moduleName == mod;
-                    });
-                    if ( it_r==req.end() ) {
-                        if ( dependencies.find(mod) != dependencies.end() ) {
-                            // circular dependency
-                            log << string(tab,'\t') << "from " << fileName << " require " << mod << " - CIRCULAR DEPENDENCY\n";
-                            circular.push_back(mod);
-                            return false;
+                    module = Module::require(mod); // try native with that name AGAIN (promoted?)
+                    if ( !module ) {
+                        auto it_r = find_if(req.begin(), req.end(), [&] ( const ModuleInfo & reqM ) {
+                            return reqM.moduleName == mod;
+                        });
+                        if ( it_r==req.end() ) {
+                            if ( dependencies.find(mod) != dependencies.end() ) {
+                                // circular dependency
+                                log << string(tab,'\t') << "from " << fileName << " require " << mod << " - CIRCULAR DEPENDENCY\n";
+                                circular.push_back(mod);
+                                return false;
+                            }
+                            dependencies.insert(mod);
+                            // module file name
+                            if ( info.moduleName.empty() ) {
+                                // request can't be translated to module name
+                                log << string(tab,'\t') << "from " << fileName << " require " << mod << " - MODULE INFO NOT FOUND\n";
+                                missing.push_back(mod);
+                                return false;
+                            }
+                            if ( !getPrerequisits(info.fileName, access, req, missing, circular, dependencies, libGroup, log, tab + 1) ) {
+                                return false;
+                            }
+                            log << string(tab,'\t') << "from " << fileName << " require " << mod
+                                << " - ok, new module " << info.moduleName << " at " << info.fileName << "\n";
+                            req.push_back(info);
+                        } else {
+                            log << string(tab,'\t') << "from " << fileName << " require " << mod << " - already required\n";
                         }
-                        dependencies.insert(mod);
-                        // module file name
-                        if ( info.moduleName.empty() ) {
-                            // request can't be translated to module name
-                            log << string(tab,'\t') << "from " << fileName << " require " << mod << " - MODULE INFO NOT FOUND\n";
-                            missing.push_back(mod);
-                            return false;
-                        }
-                        if ( !getPrerequisits(info.fileName, access, req, missing, circular, dependencies, libGroup, log, tab + 1) ) {
-                            return false;
-                        }
-                        log << string(tab,'\t') << "from " << fileName << " require " << mod
-                            << " - ok, new module " << info.moduleName << " at " << info.fileName << "\n";
-                        req.push_back(info);
                     } else {
-                        log << string(tab,'\t') << "from " << fileName << " require " << mod << " - already required\n";
+                        log << string(tab,'\t') << "from " << fileName << " require " << mod << " - shared, ok\n";
+                        libGroup.addModule(module);
+                        for ( const auto & dep : module->requireModule ) {
+                            libGroup.addModule(dep.first);
+                        }
                     }
                 } else {
                     log << string(tab,'\t') << "from " << fileName << " require " << mod << " - ok\n";
@@ -196,6 +225,7 @@ namespace das {
         auto time0 = ref_time_ticks();
         int err;
         auto program = g_Program = make_smart<Program>();
+        program->promoteToBuiltin = false;
         program->isCompiling = true;
         g_Program->policies = policies;
         g_Access = access;
@@ -254,9 +284,6 @@ namespace das {
                 if (program->options.getBoolOption("log")) {
                     logs << *program;
                 }
-                if (program->options.getBoolOption("plot")) {
-                    logs << "\n" << program->dotGraph() << "\n";
-                }
             }
             g_Program.reset();
             sort(program->errors.begin(), program->errors.end());
@@ -308,6 +335,9 @@ namespace das {
                     if ( program->thisModule->name.empty() ) {
                         program->thisModule->name = mod.moduleName;
                     }
+                    if ( program->promoteToBuiltin ) {
+                        program->thisModule->promoteToBuiltin();
+                    }
                     libGroup.addModule(program->thisModule.release());
                     program->library.foreach([&](Module * pm) -> bool {
                         if ( !pm->name.empty() && pm->name!="$" ) {
@@ -320,8 +350,15 @@ namespace das {
                 }
             }
             auto res = parseDaScript(fileName, access, logs, libGroup, exportAll, policies);
+            if ( res->promoteToBuiltin ) {
+                res->thisModule->promoteToBuiltin();
+            }
             if ( res->options.getBoolOption("log_require",false) ) {
                 logs << "module dependency graph:\n" << tw.str();
+            }
+            if ( !res->failed() ) {
+                uint32_t hf = hash_blockz32((uint8_t *)fileName.c_str());
+                res->thisNamespace = "_anon_" + to_string(hf);
             }
             return res;
         } else {

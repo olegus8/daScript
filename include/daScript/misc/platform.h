@@ -67,6 +67,9 @@
 
 #ifndef _MSC_VER
     #define __forceinline inline __attribute__((always_inline))
+    #define ___noinline __attribute__((noinline))
+#else
+    #define ___noinline __declspec(noinline)
 #endif
 
 #if defined(__has_feature)
@@ -188,6 +191,12 @@ inline void das_aligned_free16(void *ptr) {
 
 #ifndef DAS_SANITIZER
 #define DAS_SANITIZER   0
+#endif
+
+#if !_TARGET_64BIT && !defined(__clang__) && (_MSC_VER <= 1900)
+#define _msc_inline_bug __declspec(noinline)
+#else
+#define _msc_inline_bug __forceinline
 #endif
 
 #include "daScript/misc/smart_ptr.h"

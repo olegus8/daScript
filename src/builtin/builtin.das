@@ -52,17 +52,28 @@ def emplace(var Arr:array<auto(numT)>;var value:numT)
     else
         concept_assert(false,"can't emplace value, which can't be moved")
 
-def push_clone(var Arr:array<auto(numT)>;value:numT;at:int)
+def push_clone(var Arr:array<auto(numT)>;value:numT implicit;at:int)
     static_if typeinfo(can_clone value)
         Arr[__builtin_array_push_zero(Arr,at,typeinfo(sizeof type<numT>))] := value
     else
         concept_assert(false,"can't push-clone value, which can't be moved")
 
-def push_clone(var Arr:array<auto(numT)>;value:numT)
+def push_clone(var Arr:array<auto(numT)>;value:numT implicit)
     static_if typeinfo(can_clone value)
         Arr[__builtin_array_push_back_zero(Arr,typeinfo(sizeof type<numT>))] := value
     else
         concept_assert(false,"can't push-clone value, which can't be moved")
+
+def push_clone ( var A : auto(CT) -# -const; b : auto(TT) implicit )
+    static_if !typeinfo(can_clone type<TT>)
+        concept_assert(false,"can't push_clone type which can't be cloned")
+    static_elif !typeinfo(can_be_placed_in_container type<TT>)
+        concept_assert(false,"can't push_clone type which can't be placed in a container")
+    static_elif !typeinfo(builtin_function_exists @@ <(var a:CT -# -const;var b:TT -# -const):void> _::emplace)
+        concept_assert(false,"can't push_clone, missing emplace")
+    else
+        var cb : TT -# -const := b
+        _::emplace(A, cb)
 
 def erase(var Arr:array<auto(numT)>;at:int)
     __builtin_array_erase(Arr,at,typeinfo(sizeof type<numT>))
@@ -387,6 +398,37 @@ def sort ( var a : array<auto(TT)>; cmp : block<(x,y:TT):bool> )
             __builtin_sort_any_cblock ( addr(a[0]), typeinfo(sizeof type<TT>), length(a), cmp )
     __builtin_array_unlock(a)
 
+def lock ( var a : array<auto(TT)> = const; blk : block<(var x : array<TT># implicit)> )
+    __builtin_array_lock(a)
+    invoke(blk, a)
+    __builtin_array_unlock(a)
+
+def lock ( a : array<auto(TT)> = const; blk : block<(x : array<TT># implicit)> )
+    __builtin_array_lock(a)
+    invoke(blk, a)
+    __builtin_array_unlock(a)
+
+def lock_data ( var a : array<auto(TT)> = const; blk : block<(var p:TT?# implicit;s:int)> )
+    let len = length(a)
+    if len != 0
+        __builtin_array_lock(a)
+        unsafe
+            invoke(blk, addr(a[0]), len)
+        __builtin_array_unlock(a)
+    else
+        var nullT : TT?
+        invoke(blk, nullT, 0)
+
+def lock_data ( a : array<auto(TT)> = const; blk : block<(p:TT?# implicit;s:int)> )
+    let len = length(a)
+    if len != 0
+        __builtin_array_lock(a)
+        unsafe
+            invoke(blk, addr(a[0]), len)
+        __builtin_array_unlock(a)
+    else
+        invoke(blk, null, 0)
+
 def find_index ( arr : array<auto(TT)> implicit; key : TT )
     for i in range(length(arr))
         if arr[i]==key
@@ -442,3 +484,21 @@ def get_command_line_arguments : array<string>
     var args : array<string>
     builtin_get_command_line_arguments(args)
     return <- args
+
+[unsafe_operation]
+def map_to_array ( data:void?; len:int; blk:block<(var arg:array<auto(TT)>#)> )
+    assert(data != null,"expecting data")
+    assert(len > 0,"at least 1 element")
+    let elem_size = typeinfo(sizeof type<TT>)
+    let num_elem = len / elem_size
+    unsafe
+        _builtin_temp_array(data, num_elem, blk)
+
+[unsafe_operation]
+def map_to_ro_array ( data:void?; len:int; blk:block<(arg:array<auto(TT)>#)> )
+    assert(data != null,"expecting data")
+    assert(len > 0,"at least 1 element")
+    let elem_size = typeinfo(sizeof type<TT>)
+    let num_elem = len / elem_size
+    unsafe
+        _builtin_temp_array(data, num_elem, blk)

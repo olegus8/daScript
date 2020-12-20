@@ -531,6 +531,7 @@ namespace das {
         cTHIS->at = block->at;
         cTHIS->name = "__this";
         cTHIS->type = make_smart<TypeDecl>(ls);
+        cTHIS->type->isExplicit = true;
         pFunc->arguments.push_back(cTHIS);
         for ( auto & arg : block->arguments ) {
             auto cA = arg->clone();
@@ -711,7 +712,7 @@ namespace das {
         }
     protected:
         vector<ExprBlock *> scopes;
-        das_map<string,string> rename;
+        das_hash_map<string,string> rename;
     };
 
     void giveBlockVariablesUniqueNames  ( const ExpressionPtr & expr ) {

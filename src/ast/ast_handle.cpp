@@ -115,11 +115,11 @@ namespace das {
         field.cppName = cppNa;
         field.decl = pT;
         field.offset = offset;
-        auto baseType = field.decl->baseType;
+        auto baseType = make_smart<TypeDecl>(*field.decl);
         field.factory = [offset,baseType](FactoryNodeType nt,Context & context,const LineInfo & at, const ExpressionPtr & value) -> SimNode * {
             if ( !value->type->isPointer() ) {
                 if ( nt==FactoryNodeType::getField || nt==FactoryNodeType::getFieldR2V ) {
-                    auto r2vType = (nt==FactoryNodeType::getField) ? Type::none : baseType;
+                    auto r2vType = (nt==FactoryNodeType::getField) ? make_smart<TypeDecl>(Type::none) : baseType;
                     auto tnode = value->trySimulate(context, offset, r2vType);
                     if ( tnode ) {
                         return tnode;
@@ -131,11 +131,11 @@ namespace das {
             case FactoryNodeType::getField:
                 return context.code->makeNode<SimNode_FieldDeref>(at,simV,offset);
             case FactoryNodeType::getFieldR2V:
-                return context.code->makeValueNode<SimNode_FieldDerefR2V>(baseType,at,simV,offset);
+                return context.code->makeValueNode<SimNode_FieldDerefR2V>(baseType->baseType,at,simV,offset);
             case FactoryNodeType::getFieldPtr:
                 return context.code->makeNode<SimNode_PtrFieldDeref>(at,simV,offset);
             case FactoryNodeType::getFieldPtrR2V:
-                return context.code->makeValueNode<SimNode_PtrFieldDerefR2V>(baseType,at,simV,offset);
+                return context.code->makeValueNode<SimNode_PtrFieldDerefR2V>(baseType->baseType,at,simV,offset);
             case FactoryNodeType::safeGetField:
                 return context.code->makeNode<SimNode_SafeFieldDeref>(at,simV,offset);
             case FactoryNodeType::safeGetFieldPtr:
@@ -175,5 +175,54 @@ namespace das {
             }
         }
         walker.walk_struct((char *)data, sti);
+    }
+
+    void BasicStructureAnnotation::from(const char* parentName) {
+        auto pann = (BasicStructureAnnotation*)(this->module->findAnnotation(parentName).get());
+        parents.reserve(pann->parents.size() + 1);
+        parents.push_back(pann);
+        for (auto pp : pann->parents) {
+            parents.push_back(pp);
+        }
+    }
+
+    void Program::validateAotCpp ( TextWriter & logs, Context & ) {
+        library.foreach([&](Module * mod) -> bool {
+            if ( mod->builtIn ) {
+                logs << "// validating " << mod->name << "\n";
+                for ( const auto & ht : mod->handleTypes ) {
+                    const auto & tp = ht.second;
+                    if ( tp->rtti_isBasicStructureAnnotation() ) {
+                        auto bs = static_pointer_cast<BasicStructureAnnotation>(tp);
+                        if ( !bs->validationNeverFails ) {
+                            auto cppt = make_smart<TypeDecl>(Type::tHandle);
+                            cppt->annotation = bs.get();
+                            auto cppn = describeCppType(cppt);
+                            logs << "//\t" << cppn << " aka " << tp->name << "\n";
+                            for ( const auto & flp : bs->fields ) {
+                                const auto & fld = flp.second;
+                                if ( fld.offset != -1 ) {
+                                    if ( fld.cppName.find('(')==string::npos ) {   // sometimes we bind ref member function as if field
+                                        logs << "\t\tstatic_assert(offsetof(" << cppn << ","
+                                            << fld.cppName << ")==" << fld.offset << ",\"mismatching offset\");\n";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for ( const auto & et : mod->enumerations ) {
+                    const auto & tp = et.second;
+                    auto cppt = make_smart<TypeDecl>(tp);
+                    auto cppn = describeCppType(cppt);
+                    auto baset = tp->makeBaseType();
+                    logs << "//\t" << cppn << " aka " << tp->name << "\n";
+                    logs << "\t\tstatic_assert( is_same < underlying_type< " << cppn << " >::type, "
+                        << describeCppType(baset) << ">::value,\"mismatching underlying type, expecting "
+                            << das_to_string(tp->baseType) << "\");\n";
+                }
+            }
+            return true;
+        },"*");
     }
 }

@@ -75,6 +75,16 @@ namespace das
         yes
     };
 
+    template <typename T>
+    struct isCloneable  {
+        template<typename U>
+        static decltype(declval<U&>() = declval<const U&>(), U (declval<const U&>()), true_type{}) func (remove_reference_t<U>*);
+        template<typename U>
+        static false_type func (...);
+        using  type = decltype(func<T>(nullptr));
+        static constexpr bool value { type::value };
+    };
+
     struct StructInfo;
     struct TypeAnnotation;
     struct EnumInfo;
@@ -120,9 +130,10 @@ namespace das
     protected:
         virtual FileInfo * getNewFileInfo ( const string & ) { return nullptr; }
     protected:
-        das_map<string, FileInfoPtr>    files;
+        das_hash_map<string, FileInfoPtr>    files;
     };
     typedef smart_ptr<FileAccess> FileAccessPtr;
+    template <> struct isCloneable<FileAccess> : false_type {};
 
     struct SimFunction;
     class Context;
@@ -133,11 +144,14 @@ namespace das
         ModuleFileAccess ( const string & pak, const FileAccessPtr & access );
         virtual ~ModuleFileAccess();
         bool failed() const { return !context || !modGet; }
-        virtual ModuleInfo getModuleInfo ( const string & req, const string & from ) const;
+        virtual ModuleInfo getModuleInfo ( const string & req, const string & from ) const override;
+        virtual string getIncludeFileName ( const string & fileName, const string & incFileName ) const override;
     protected:
         Context *           context = nullptr;
         SimFunction *       modGet = nullptr;
+        SimFunction *       includeGet = nullptr;
     };
+    template <> struct isCloneable<ModuleFileAccess> : false_type {};
 
     struct LineInfo {
         LineInfo() = default;
@@ -150,7 +164,6 @@ namespace das
         bool operator != ( const LineInfo & info ) const;
         bool inside ( const LineInfo & info ) const;
         string describe(bool fully = false) const;
-        string describeJson() const;
         FileInfo *  fileInfo = nullptr;
         uint32_t    column = 0, line = 0;
         uint32_t    last_column = 0, last_line = 0;

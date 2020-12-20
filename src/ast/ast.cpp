@@ -9,15 +9,16 @@ namespace das {
 
     AotListBase * AotListBase::head = nullptr;
 
-    AotListBase::AotListBase() {
+    AotListBase::AotListBase( RegisterAotFunctions prfn ) {
         tail = head;
         head = this;
+        regFn = prfn;
     }
 
     void AotListBase::registerAot ( AotLibrary & lib ) {
         auto it = head;
         while ( it ) {
-            it->registerAotFunctions(lib);
+            (*it->regFn)(lib);
             it = it->tail;
         }
     }
@@ -315,6 +316,42 @@ namespace das {
         return module ? module->name+"::"+name : name;
     }
 
+    bool Structure::canBePlacedInContainer(das_set<Structure *> & dep) const {   // &&
+        for ( const auto & fd : fields ) {
+            if ( fd.type && !fd.type->canBePlacedInContainer(dep) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool Structure::hasNonTrivialCtor(das_set<Structure *> & dep) const {   // &&
+        for ( const auto & fd : fields ) {
+            if ( fd.type && !fd.type->hasNonTrivialCtor(dep) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool Structure::hasNonTrivialDtor(das_set<Structure *> & dep) const {   // &&
+        for ( const auto & fd : fields ) {
+            if ( fd.type && !fd.type->hasNonTrivialDtor(dep) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool Structure::hasNonTrivialCopy(das_set<Structure *> & dep) const {   // &&
+        for ( const auto & fd : fields ) {
+            if ( fd.type && !fd.type->hasNonTrivialCopy(dep) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     bool Structure::isLocal(das_set<Structure *> & dep) const {   // &&
         for ( const auto & fd : fields ) {
             if ( fd.type && !fd.type->isLocal(dep) ) {
@@ -381,6 +418,22 @@ namespace das {
 
     bool Variable::isAccessUnused() const {
         return !(access_get || access_init || access_pass || access_ref);
+    }
+
+    bool Variable::isCtorInitialized() const {
+        if ( !init ) {
+            return false;
+        }
+        if ( !type->hasNonTrivialCtor() ) {
+            return false;
+        }
+        if ( init->rtti_isCallFunc() ) {
+            auto cfun = static_pointer_cast<ExprCallFunc>(init);
+            if ( cfun->func && cfun->func->isTypeConstructor ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // function
@@ -552,10 +605,130 @@ namespace das {
 
     // built-in function
 
-    BuiltInFunction::BuiltInFunction ( const string & fn, const string & fnCpp ) {
+    BuiltInFunction::BuiltInFunction ( const char * fn, const char * fnCpp ) {
         builtIn = true;
         name = fn;
-        cppName = fnCpp;
+        cppName = fnCpp ? fnCpp : "";
+    }
+
+    void BuiltInFunction::construct (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi != args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            if ( arg->type->isTempType() ) {
+                arg->type->implicit = true;
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() && !result->ref ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( result->ref ) {
+                // its ref, so its fine
+            } else if ( result->hasNonTrivialCtor() ) {
+                // we can initialize it locally
+            } else {
+                DAS_FATAL_LOG("BuiltInFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        } else {
+            copyOnReturn = false;
+            moveOnReturn = false;
+        }
+    }
+
+    void BuiltInFunction::constructExternal (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi != args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() && !result->ref ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( !result->ref ) {
+                DAS_FATAL_LOG("ExternalFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        } else {
+            copyOnReturn = false;
+            moveOnReturn = false;
+        }
+    }
+
+    void BuiltInFunction::constructInterop (const vector<TypeDeclPtr> & args ) {
+        this->totalStackSize = sizeof(Prologue);
+        for ( size_t argi=1; argi!=args.size(); ++argi ) {
+            auto arg = make_smart<Variable>();
+            arg->name = "arg" + to_string(argi-1);
+            arg->type = args[argi];
+            if ( arg->type->baseType==Type::fakeContext ) {
+                arg->init = make_smart<ExprFakeContext>(at);
+            } else if ( arg->type->baseType==Type::fakeLineInfo ) {
+                arg->init = make_smart<ExprFakeLineInfo>(at);
+            }
+            this->arguments.push_back(arg);
+        }
+        result = args[0];
+        if ( result->isRefType() && !result->ref ) {
+            if ( result->canCopy() ) {
+                copyOnReturn = true;
+                moveOnReturn = false;
+            } else if ( result->canMove() ) {
+                copyOnReturn = false;
+                moveOnReturn = true;
+            } else if ( !result->ref ) {
+                DAS_FATAL_LOG("ExternalFn %s can't be bound. It returns values which can't be copied or moved\n", name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        } else {
+            copyOnReturn = false;
+            moveOnReturn = false;
+        }
+    }
+
+    // add extern func
+
+    void addExternFunc(Module& mod, const FunctionPtr & fnX, bool isCmres, SideEffects seFlags) {
+        if (!isCmres) {
+            if (fnX->result->isRefType() && !fnX->result->ref) {
+                DAS_FATAL_LOG(
+                    "addExtern(%s)::failed in module %s\n"
+                    "  this function should be bound with SimNode_ExtFuncCallAndCopyOrMove option\n"
+                    "  likely cast<> is implemented for the return type, and it should not\n",
+                    fnX->name.c_str(), mod.name.c_str());
+                DAS_FATAL_ERROR;
+            }
+        }
+        fnX->setSideEffects(seFlags);
+        if (!mod.addFunction(fnX)) {
+            DAS_FATAL_LOG("addExtern(%s) failed in module %s\n", fnX->name.c_str(), mod.name.c_str());
+            DAS_FATAL_ERROR;
+        }
     }
 
     // expression
@@ -731,6 +904,18 @@ namespace das {
         return cexpr;
     }
 
+    // ConstPtr
+
+    ExpressionPtr ExprConstPtr::clone( const ExpressionPtr & expr ) const {
+        auto cexpr = clonePtr<ExprConstPtr>(expr);
+        ExprConst::clone(cexpr);
+        cexpr->isSmartPtr = isSmartPtr;
+        if ( ptrType ) {
+            cexpr->ptrType = make_smart<TypeDecl>(*ptrType);
+        }
+        return cexpr;
+    }
+
     // ConstEnumeration
 
     ExpressionPtr ExprConstEnumeration::visit(Visitor & vis) {
@@ -784,6 +969,26 @@ namespace das {
         auto cexpr = clonePtr<ExprAssert>(expr);
         ExprLooksLikeCall::clone(cexpr);
         cexpr->isVerify = isVerify;
+        return cexpr;
+    }
+
+    // ExprQuote
+
+    ExpressionPtr ExprQuote::visit(Visitor & vis) {
+        vis.preVisit(this);
+        if ( vis.canVisitQuoteSubexpression(this) ) {
+            for ( auto & arg : arguments ) {
+                vis.preVisitLooksLikeCallArg(this, arg.get(), arg==arguments.back());
+                arg = arg->visit(vis);
+                arg = vis.visitLooksLikeCallArg(this, arg.get(), arg==arguments.back());
+            }
+        }
+        return vis.visit(this);
+    }
+
+    ExpressionPtr ExprQuote::clone( const ExpressionPtr & expr ) const {
+        auto cexpr = clonePtr<ExprQuote>(expr);
+        ExprLooksLikeCall::clone(cexpr);
         return cexpr;
     }
 
@@ -1424,6 +1629,15 @@ namespace das {
 
     // ExprOp1
 
+    bool ExprOp1::swap_tail ( Expression * expr ) {
+        if ( subexpr.get()==expr ) {
+            subexpr = expr;
+            return true;
+        } else {
+            return subexpr->swap_tail(expr);
+        }
+    }
+
     ExpressionPtr ExprOp1::visit(Visitor & vis) {
         vis.preVisit(this);
         subexpr = subexpr->visit(vis);
@@ -1450,6 +1664,15 @@ namespace das {
     }
 
     // ExprOp2
+
+    bool ExprOp2::swap_tail ( Expression * expr ) {
+        if ( right.get()==expr ) {
+            right = expr;
+            return true;
+        } else {
+            return right->swap_tail(expr);
+        }
+    }
 
     ExpressionPtr ExprOp2::visit(Visitor & vis) {
         vis.preVisit(this);
@@ -1486,6 +1709,15 @@ namespace das {
     }
 
     // ExprOp3
+
+    bool ExprOp3::swap_tail ( Expression * expr ) {
+        if ( right.get()==expr ) {
+            right = expr;
+            return true;
+        } else {
+            return right->swap_tail(expr);
+        }
+    }
 
     ExpressionPtr ExprOp3::visit(Visitor & vis) {
         vis.preVisit(this);

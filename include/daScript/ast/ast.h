@@ -180,6 +180,10 @@ namespace das
         bool isTemp( das_set<Structure *> & dep ) const;
         bool isShareable ( das_set<Structure *> & dep ) const;
         bool hasClasses( das_set<Structure *> & dep ) const;
+        bool hasNonTrivialCtor ( das_set<Structure *> & dep ) const;
+        bool hasNonTrivialDtor ( das_set<Structure *> & dep ) const;
+        bool hasNonTrivialCopy ( das_set<Structure *> & dep ) const;
+        bool canBePlacedInContainer ( das_set<Structure *> & dep ) const;
         string describe() const { return name; }
         string getMangledName() const;
         bool hasAnyInitializers() const;
@@ -210,6 +214,7 @@ namespace das
         string getMangledName() const;
         uint32_t getMangledNameHash() const;
         bool isAccessUnused() const;
+        bool isCtorInitialized() const;
         string          name;
         TypeDeclPtr     type;
         ExpressionPtr   init;
@@ -315,13 +320,25 @@ namespace das
             return p;
         }
         virtual bool canAot(das_set<Structure *> &) const { return true; }
-        virtual bool canMove() const { return false; }
-        virtual bool canCopy() const { return false; }
+        virtual bool canMove() const {
+            return !hasNonTrivialCopy();
+        }
+        virtual bool canCopy() const {
+            return !hasNonTrivialCopy();
+        }
         virtual bool canClone() const { return false; }
         virtual bool isPod() const { return false; }
         virtual bool isRawPod() const { return false; }
         virtual bool isRefType() const { return false; }
-        virtual bool isLocal() const { return false; }
+        virtual bool hasNonTrivialCtor() const { return true; }
+        virtual bool hasNonTrivialDtor() const { return true; }
+        virtual bool hasNonTrivialCopy() const { return true; }
+        virtual bool canBePlacedInContainer() const {
+            return !hasNonTrivialCtor() && !hasNonTrivialDtor() && !hasNonTrivialCopy();
+        }
+        virtual bool isLocal() const {
+            return isPod() && !hasNonTrivialCtor() && !hasNonTrivialDtor() && !hasNonTrivialCopy();
+        }
         virtual bool canNew() const { return false; }
         virtual bool canDelete() const { return false; }
         virtual bool needDelete() const { return canDelete(); }
@@ -332,6 +349,7 @@ namespace das
         virtual bool isShareable ( ) const { return true; }
         virtual bool isSmart() const { return false; }
         virtual bool canSubstitute ( TypeAnnotation * /* passType */ ) const { return false; }
+        virtual bool canBeSubstituted ( TypeAnnotation * /* passType */ ) const { return false; }
         virtual string getSmartAnnotationCloneFunction () const { return ""; }
         virtual size_t getSizeOf() const { return sizeof(void *); }
         virtual size_t getAlignOf() const { return 1; }
@@ -405,7 +423,7 @@ namespace das
         virtual ExpressionPtr clone( const ExpressionPtr & expr = nullptr ) const;
         static ExpressionPtr autoDereference ( const ExpressionPtr & expr );
         virtual SimNode * simulate (Context & /*context*/ ) const { DAS_ASSERT(0); return nullptr; };
-        virtual SimNode * trySimulate (Context & context, uint32_t extraOffset, Type r2vType ) const;
+        virtual SimNode * trySimulate (Context & context, uint32_t extraOffset, const TypeDeclPtr & r2vType ) const;
         virtual bool rtti_isSequence() const { return false; }
         virtual bool rtti_isConstant() const { return false; }
         virtual bool rtti_isStringConstant() const { return false; }
@@ -442,6 +460,7 @@ namespace das
         virtual bool rtti_isMakeLocal() const { return false; }
         virtual bool rtti_isMakeStruct() const { return false; }
         virtual bool rtti_isMakeTuple() const { return false; }
+        virtual bool rtti_isMakeVariant() const { return false; }
         virtual bool rtti_isIfThenElse() const { return false; }
         virtual bool rtti_isFor() const { return false; }
         virtual bool rtti_isWhile() const { return false; }
@@ -452,6 +471,7 @@ namespace das
         virtual bool rtti_isFakeLineInfo() const { return false; }
         virtual bool rtti_isAscend() const { return false; }
         virtual Expression * tail() { return this; }
+        virtual bool swap_tail ( Expression * ) { return false; }
         virtual uint32_t getEvalFlags() const { return 0; }
         LineInfo    at;
         TypeDeclPtr type;
@@ -543,6 +563,12 @@ namespace das
     ,   inferedSideEffects = uint32_t(SideEffects::modifyArgument) | uint32_t(SideEffects::accessGlobal) | uint32_t(SideEffects::invoke)
     };
 
+    struct InferHistory {
+        LineInfo    at;
+        Function *  func = nullptr;
+        InferHistory() = default;
+        InferHistory(const LineInfo & a, const FunctionPtr & p) : at(a), func(p.get()) {}
+    };
     class Function : public ptr_ref_count {
     public:
         enum class DescribeExtra     { no, yes };
@@ -611,6 +637,7 @@ namespace das
                 bool    firstArgReturnType : 1;
                 bool    noPointerCast : 1;
                 bool    isClassMethod : 1;
+                bool    isTypeConstructor : 1;
             };
             uint32_t flags = 0;
         };
@@ -625,12 +652,6 @@ namespace das
             };
             uint32_t    sideEffectFlags = 0;
         };
-        struct InferHistory {
-            LineInfo    at;
-            Function *  func = nullptr;
-            InferHistory() = default;
-            InferHistory(const LineInfo & a, const FunctionPtr & p) : at(a), func(p.get()) {}
-        };
         vector<InferHistory> inferStack;
         Function * fromGeneric = nullptr;
         uint64_t hash = 0;
@@ -644,7 +665,7 @@ namespace das
 
     class BuiltInFunction : public Function {
     public:
-        BuiltInFunction ( const string & fn, const string & fnCpp );
+        BuiltInFunction ( const char *fn, const char * fnCpp );
         virtual string getAotBasicName() const override {
             return cppName.empty() ? name : cppName;
         }
@@ -661,9 +682,18 @@ namespace das
             }
             return this;
         }
+    protected:
+        void construct (const vector<TypeDeclPtr> & args );
+        void constructExternal (const vector<TypeDeclPtr> & args );
+        void constructInterop (const vector<TypeDeclPtr> & args );
     public:
         string cppName;
     };
+
+    template <typename RetT, typename ...Args>
+    ___noinline vector<TypeDeclPtr> makeBuiltinArgs ( const ModuleLibrary & lib ) {
+        return { makeType<RetT>(lib), makeArgumentType<Args>(lib)... };
+    }
 
     struct TypeInfoMacro : public ptr_ref_count {
         TypeInfoMacro ( const string & n )
@@ -733,6 +763,7 @@ namespace das
     class Module {
     public:
         Module ( const string & n = "" );
+        void promoteToBuiltin();
         virtual ~Module();
         virtual void addPrerequisits ( ModuleLibrary & ) const {}
         virtual ModuleAotType aotRequire ( TextWriter & ) const { return ModuleAotType::no_aot; }
@@ -762,7 +793,7 @@ namespace das
         static void Shutdown();
         static TypeAnnotation * resolveAnnotation ( const TypeInfo * info );
         static Type findOption ( const string & name );
-        static void foreach(function<bool(Module * module)> && func);
+        static void foreach(const callable<bool(Module * module)> & func);
         virtual uintptr_t rtti_getUserData() {return uintptr_t(0);}
         void verifyAotReady();
         void verifyBuiltinNames(uint32_t flags);
@@ -848,7 +879,7 @@ namespace das
         virtual ~ModuleLibrary() {};
         void addBuiltInModule ();
         void addModule ( Module * module );
-        void foreach ( function<bool (Module * module)> && func, const string & name ) const;
+        void foreach ( const callable<bool (Module * module)> & func, const string & name ) const;
         vector<TypeDeclPtr> findAlias ( const string & name, Module * inWhichModule ) const;
         vector<AnnotationPtr> findAnnotation ( const string & name, Module * inWhichModule ) const;
         vector<TypeInfoMacroPtr> findTypeInfoMacro ( const string & name, Module * inWhichModule ) const;
@@ -878,7 +909,7 @@ namespace das
     protected:
         das_map<string,ModuleGroupUserDataPtr>  userData;
     };
-
+    template <> struct isCloneable<ModuleGroup> : false_type {};
 
     struct PassMacro : ptr_ref_count {
         PassMacro ( const string na = "" ) : name(na) {}
@@ -960,6 +991,7 @@ namespace das
         bool smart_pointer_by_value_unsafe = false;     // is passing smart_ptr by value unsafe?
         bool allow_block_variable_shadowing = false;
         bool allow_shared_lambda = false;
+        bool ignore_shared_modules = false;
     // environment
         bool no_optimizations = false;                  // disable optimizations, regardless of settings
         bool fail_on_no_aot = true;                     // AOT link failure is error
@@ -992,7 +1024,7 @@ namespace das
         Module * addModule ( const string & name );
         void finalizeAnnotations();
         void inferTypes(TextWriter & logs, ModuleGroup & libGroup);
-        void inferTypesDirty(TextWriter & logs);
+        void inferTypesDirty(TextWriter & logs, bool verbose);
         void lint ( ModuleGroup & libGroup );
         void checkSideEffects();
         void foldUnsafe();
@@ -1009,7 +1041,6 @@ namespace das
         void clearSymbolUse();
         void markOrRemoveUnusedSymbols(bool forceAll = false);
         void allocateStack(TextWriter & logs);
-        string dotGraph();
         bool simulate ( Context & context, TextWriter & logs, StackAllocator * sharedStack = nullptr );
         uint64_t getInitSemanticHashWithDep( uint64_t initHash ) const;
         void linkCppAot ( Context & context, AotLibrary & aotLib, TextWriter & logs );
@@ -1024,6 +1055,7 @@ namespace das
         void setPrintFlags();
         void aotCpp ( Context & context, TextWriter & logs );
         void registerAotCpp ( TextWriter & logs, Context & context, bool headers = true );
+        void validateAotCpp ( TextWriter & logs, Context & context );
         void buildMNLookup ( Context & context, TextWriter & logs );
         void buildGMNLookup ( Context & context, TextWriter & logs );
         void buildADLookup ( Context & context, TextWriter & logs );
@@ -1046,6 +1078,7 @@ namespace das
             return ss.str();
         }
     public:
+        string                      thisNamespace;
         unique_ptr<Module>          thisModule;
         ModuleLibrary               library;
         ModuleGroup *               thisModuleGroup;
@@ -1063,6 +1096,7 @@ namespace das
                 bool    isSimulating : 1;
                 bool    isCompilingMacros : 1;
                 bool    needMacroModule : 1;
+                bool    promoteToBuiltin : 1;
             };
             uint32_t    flags = 0;
         };

@@ -8,10 +8,6 @@
 #include "daScript/misc/debug_break.h"
 
 #include <stdarg.h>
-
-// this is here for the default implementation of to_out and to_err
-#include <setjmp.h>
-
 #include <mutex>
 
 namespace das
@@ -52,7 +48,9 @@ namespace das
 
     SimNode * SimNode::copyNode ( Context &, NodeAllocator * code ) {
         auto prefix = ((NodePrefix *)this) - 1;
+#ifndef NDEBUG
         DAS_ASSERTF(prefix->magic==0xdeadc0de,"node was allocated on the heap without prefix");
+#endif
         char * newNode = code->allocate(prefix->size);
         memcpy ( newNode, (char *)this, prefix->size );
         return (SimNode *) newNode;
@@ -195,7 +193,11 @@ namespace das
             if ( message )
                 error_message = error_message + ", " + message;
             string error = reportError(debugInfo, error_message, "", "");
+#ifdef NDEBUG
+            error = context.getStackWalk(&debugInfo, false, false) + error;
+#else
             error = context.getStackWalk(&debugInfo, true, true) + error;
+#endif
             context.to_err(error.c_str());
             context.throw_error_at(debugInfo,"assert failed");
         }
@@ -330,6 +332,8 @@ namespace das
         return v_zero();
     }
 
+#if DAS_DEBUGGER
+
     vec4f SimNodeDebug_Block::eval ( Context & context ) {
         DAS_PROFILE_NODE
         SimNode ** __restrict tail = list + total;
@@ -342,6 +346,8 @@ namespace das
         return v_zero();
     }
 
+#endif
+
     vec4f SimNode_BlockNF::eval ( Context & context ) {
         DAS_PROFILE_NODE
         SimNode ** __restrict tail = list + total;
@@ -351,6 +357,8 @@ namespace das
         }
         return v_zero();
     }
+
+#if DAS_DEBUGGER
 
     vec4f SimNodeDebug_BlockNF::eval ( Context & context ) {
         DAS_PROFILE_NODE
@@ -362,6 +370,8 @@ namespace das
         }
         return v_zero();
     }
+
+#endif
 
     vec4f SimNode_ClosureBlock::eval ( Context & context ) {
         DAS_PROFILE_NODE
@@ -380,6 +390,8 @@ namespace das
         }
     }
 
+#if DAS_DEBUGGER
+
     vec4f SimNodeDebug_ClosureBlock::eval ( Context & context ) {
         DAS_PROFILE_NODE
         SimNode ** __restrict tail = list + total;
@@ -397,6 +409,8 @@ namespace das
             return v_zero();
         }
     }
+
+#endif
 
 // SimNode_BlockWithLabels
 
@@ -425,6 +439,8 @@ namespace das
         return v_zero();
     }
 
+#if DAS_DEBUGGER
+
     vec4f SimNodeDebug_BlockWithLabels::eval ( Context & context ) {
         DAS_PROFILE_NODE
         SimNode ** __restrict tail = list + total;
@@ -450,6 +466,8 @@ namespace das
         evalFinal(context);
         return v_zero();
     }
+
+#endif
 
     // SimNode_Let
 
@@ -480,6 +498,8 @@ namespace das
         return v_zero();
     }
 
+#if DAS_DEBUGGER
+
     vec4f SimNodeDebug_While::eval ( Context & context ) {
         DAS_PROFILE_NODE
         SimNode ** __restrict tail = list + total;
@@ -497,6 +517,8 @@ namespace das
         context.stopFlags &= ~EvalFlags::stopForBreak;
         return v_zero();
     }
+
+#endif
 
     // Return
 
@@ -1171,7 +1193,7 @@ namespace das
 #endif
     }
 
-    bool Context::runWithCatch ( const function<void()> & subexpr ) {
+    bool Context::runWithCatch ( const callable<void()> & subexpr ) {
         auto aa = abiArg; auto acm = abiCMRES;
         char * EP, * SP;
         stack.watermark(EP,SP);

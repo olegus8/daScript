@@ -1,7 +1,7 @@
 options indenting = 4
 options remove_unused_symbols = false
 
-module json
+module json shared
 
 require strings
 
@@ -58,7 +58,7 @@ def lexer ( text : array<uint8> )
 
 [private]
 def _lexer ( var stext : string implicit )
-    return <- generator<Token>() <| $()
+    return <- generator<Token>() <|
         var tin : iterator<int>
         unsafe
             tin <- each(stext)

@@ -300,8 +300,8 @@ namespace das
         return v_zero();
     }
 
-    void builtin_stackwalk ( Context * context, LineInfoArg * lineInfo ) {
-        context->stackWalk(lineInfo, true, true);
+    void builtin_stackwalk ( bool args, bool vars, Context * context, LineInfoArg * lineInfo ) {
+        context->stackWalk(lineInfo, args, vars);
     }
 
     void builtin_terminate ( Context * context ) {
@@ -803,6 +803,16 @@ namespace das
         return context->stringHeap->allocateString(str, strLen);
     }
 
+    void builtin_temp_array ( void * data, int size, const Block & block, Context * context ) {
+        Array arr;
+        arr.data = (char *) data;
+        arr.size = arr.capacity = size;
+        arr.lock = 1;
+        arr.flags = 0;
+        vec4f args[1];
+        args[0] = cast<Array &>::from(arr);
+        context->invoke(block, args, nullptr);
+    }
 
     void Module_BuiltIn::addRuntime(ModuleLibrary & lib) {
         // printer flags
@@ -873,8 +883,11 @@ namespace das
         addExtern<DAS_BIND_FUN(builtin_print)>(*this, lib, "print", SideEffects::modifyExternal, "builtin_print");
         addInterop<builtin_sprint,char *,vec4f,PrintFlags>(*this, lib, "sprint", SideEffects::modifyExternal, "builtin_sprint");
         addExtern<DAS_BIND_FUN(builtin_terminate)>(*this, lib, "terminate", SideEffects::modifyExternal, "terminate");
-        addExtern<DAS_BIND_FUN(builtin_stackwalk)>(*this, lib, "stackwalk", SideEffects::modifyExternal, "builtin_stackwalk");
         addInterop<builtin_breakpoint,void>(*this, lib, "breakpoint", SideEffects::modifyExternal, "breakpoint");
+        // stackwalk
+        auto fnsw = addExtern<DAS_BIND_FUN(builtin_stackwalk)>(*this, lib, "stackwalk", SideEffects::modifyExternal, "builtin_stackwalk");
+        fnsw->arguments[0]->init = make_smart<ExprConstBool>(true);
+        fnsw->arguments[1]->init = make_smart<ExprConstBool>(true);
         // profiler
         addExtern<DAS_BIND_FUN(resetProfiler)>(*this, lib, "reset_profiler", SideEffects::modifyExternal, "resetProfiler");
         addExtern<DAS_BIND_FUN(dumpProfileInfo)>(*this, lib, "dump_profile_info", SideEffects::modifyExternal, "dumpProfileInfo");
@@ -989,5 +1002,9 @@ namespace das
         addExtern<DAS_BIND_FUN(peek_das_string)>(*this, lib, "peek",
             SideEffects::modifyExternal,"peek_das_string_T")->setAotTemplate();
         addExtern<DAS_BIND_FUN(builtin_string_clone)>(*this, lib, "clone_string", SideEffects::none, "builtin_string_clone");
+        // temp array out of mem
+        auto bta = addExtern<DAS_BIND_FUN(builtin_temp_array)>(*this, lib, "_builtin_temp_array", SideEffects::invoke, "builtin_temp_array");
+        bta->unsafeOperation = true;
+        bta->privateFunction = true;
     }
 }

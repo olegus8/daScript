@@ -14,12 +14,6 @@
 
 using namespace das;
 
-#ifndef _MSC_VER
-#define __noinline    __attribute__((noinline))
-#else
-#define __noinline    __declspec(noinline)
-#endif
-
 void testManagedInt(const TBlock<void,const vector<int32_t>> & blk, Context * context) {
     vector<int32_t> arr;
     for (int32_t x = 0; x != 10; ++x) {
@@ -30,7 +24,7 @@ void testManagedInt(const TBlock<void,const vector<int32_t>> & blk, Context * co
     context->invoke(blk, args, nullptr);
 }
 
-__noinline void updateObject ( Object & obj ) {
+___noinline void updateObject ( Object & obj ) {
     obj.pos.x += obj.vel.x;
     obj.pos.y += obj.vel.y;
     obj.pos.z += obj.vel.z;
@@ -78,7 +72,7 @@ MAKE_TYPE_FACTORY(Object, Object)
 namespace das {
     template <>
     struct typeName<ObjectArray> {
-        static string name() {
+        constexpr static const char * name() {
             return "ObjectArray";
         }
     };
@@ -92,7 +86,7 @@ namespace das {
 }
 
 
-__noinline int AddOne(int a) {
+___noinline int AddOne(int a) {
     return a+1;
 }
 
@@ -564,7 +558,7 @@ typedef unordered_map<char *, int32_t, dictKeyHash, dictKeyEqual> dict_hash_map;
     return maxOcc;
 }
 
-__noinline bool isprime(int n) {
+___noinline bool isprime(int n) {
     for (int i = 2; i != n; ++i) {
         if (n % i == 0) {
             return false;
@@ -573,7 +567,7 @@ __noinline bool isprime(int n) {
     return true;
 }
 
-__noinline int testPrimes(int n) {
+___noinline int testPrimes(int n) {
     int count = 0;
     for (int i = 2; i != n + 1; ++i) {
         if (isprime(i)) {
@@ -583,7 +577,7 @@ __noinline int testPrimes(int n) {
     return count;
 }
 
-__noinline int testFibR(int n) {
+___noinline int testFibR(int n) {
     if (n < 2) {
         return n;
     }
@@ -592,7 +586,7 @@ __noinline int testFibR(int n) {
     }
 }
 
-__noinline int testFibI(int n) {
+___noinline int testFibI(int n) {
     int last = 0;
     int cur = 1;
     for (int i = 0; i != n - 1; ++i) {
@@ -603,7 +597,7 @@ __noinline int testFibI(int n) {
     return cur;
 }
 
-__noinline void particles(ObjectArray & objects, int count) {
+___noinline void particles(ObjectArray & objects, int count) {
     for (int i = 0; i != count; ++i) {
         for (auto & obj : objects) {
             updateObject(obj);
@@ -611,7 +605,7 @@ __noinline void particles(ObjectArray & objects, int count) {
     }
 }
 
-__noinline void particlesI(ObjectArray & objects, int count) {
+___noinline void particlesI(ObjectArray & objects, int count) {
     for (int i = 0; i != count; ++i) {
         for (auto & obj : objects) {
             obj.pos.x += obj.vel.x;
@@ -621,19 +615,19 @@ __noinline void particlesI(ObjectArray & objects, int count) {
     }
 }
 
-__noinline void testParticles(int count) {
+___noinline void testParticles(int count) {
     ObjectArray objects;
     objects.resize(50000);
     particles(objects, count);
 }
 
-__noinline void testParticlesI(int count) {
+___noinline void testParticlesI(int count) {
     ObjectArray objects;
     objects.resize(50000);
     particlesI(objects, count);
 }
 
-__noinline void testTryCatch(Context * context) {
+___noinline void testTryCatch(Context * context) {
     #if _CPPUNWIND || __cpp_exceptions
     int arr[1000];
     int cnt = 0;
@@ -656,7 +650,7 @@ __noinline void testTryCatch(Context * context) {
     #endif
 }
 
-__noinline float testExpLoop(int count) {
+___noinline float testExpLoop(int count) {
     float ret = 0;
     for (int i = 0; i < count; ++i)
         ret += expf(1.f/(1.f+i));

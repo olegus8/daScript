@@ -69,12 +69,13 @@ struct TestObjectFoo {
     Point3 hit;
     int32_t fooData;
     SomeEnum_16 e16;
-    TestObjectFoo * foo_loop = nullptr;
-    TestObjectFoo() {}
+    TestObjectFoo * foo_loop;
+    int32_t fooArray[3];
     int propAdd13() {
         return fooData + 13;
     }
     __forceinline Point3 hitPos() const { return hit; }
+    __forceinline const Point3 & hitPosRef() const { return hit; }
     __forceinline bool operator == ( const TestObjectFoo & obj ) const {
         return fooData == obj.fooData;
     }
@@ -86,6 +87,7 @@ struct TestObjectFoo {
     __forceinline TestObjectFoo * getLoop() { return foo_loop; }
     __forceinline const TestObjectFoo * getLoop() const { return foo_loop; }
 };
+static_assert ( std::is_trivially_constructible<TestObjectFoo>::value, "this one needs to remain trivially constructable" );
 
 typedef das::vector<TestObjectFoo> FooArray;
 
@@ -165,6 +167,10 @@ bool tempArrayExample(const das::TArray<char *> & arr,
     const das::TBlock<void, das::TTemporary<const das::TArray<char *>>> & blk,
     das::Context * context);
 
+void tempArrayAliasExample(const das::TArray<Point3> & arr,
+    const das::TBlock<void, das::TTemporary<const das::TArray<Point3>>> & blk,
+    das::Context * context);
+
 __forceinline TestObjectFoo & fooPtr2Ref(TestObjectFoo * pMat) {
     return *pMat;
 }
@@ -224,3 +230,10 @@ namespace das {
 __forceinline EntityId make_invalid_id() {
     return EntityId(-1);
 }
+
+struct FancyClass {
+    int32_t value;
+    das::string hidden; // hidden property which makes it non-trivial
+    FancyClass () : value(13) {}
+    FancyClass ( int32_t a, int32_t b ) : value(a+b) {}
+};

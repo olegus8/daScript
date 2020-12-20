@@ -35,6 +35,7 @@ namespace das {
             disableAot = prog->options.getBoolOption("no_aot",false);
         }
         bool finished() const { return !needRestart; }
+        bool verbose = true;
     protected:
         FunctionPtr             func;
         vector<VariablePtr>     local;
@@ -43,7 +44,7 @@ namespace das {
         vector<ExprBlock *>     scopes;
         vector<ExprWith *>      with;
         vector<size_t>          varStack;
-        das_map<int32_t,int32_t>    labels;
+        das_hash_set<int32_t>   labels;
         size_t                  fieldOffset = 0;
         int32_t                 fieldIndex = 0;
         bool                    cppLayout = false;
@@ -77,7 +78,7 @@ namespace das {
             varStack.pop_back();
         }
         void error ( const string & err, const string & extra, const string & fixme, const LineInfo & at, CompilationError cerr = CompilationError::unspecified ) const {
-            if ( func ) {
+            if ( verbose && func ) {
                 string ex = extra;
                 if (!extra.empty()) ex += "\n";
                 ex += func->getLocationExtra();
@@ -93,22 +94,34 @@ namespace das {
             FoldingVisitor::reportFolding();
             needRestart = true;
         }
+        string describeType ( const TypeDeclPtr & decl ) const {
+            return verbose ? decl->describe() : "";
+        }
+        string describeType ( const TypeDecl * decl ) const {
+            return verbose ? decl->describe() : "";
+        }
+        string describeFunction ( const FunctionPtr & fun ) const {
+            return verbose ? fun->describe() : "";
+        }
+        string describeFunction ( const Function * fun ) const {
+            return verbose ? fun->describe() : "";
+        }
     protected:
         void verifyType ( const TypeDeclPtr & decl, bool allowExplicit = false ) const {
             // TODO: enable and cleanup
             if ( decl->isExplicit && !allowExplicit ) {
                 /*
-                error("expression can't be explicit here " + decl->describe(), "", "",
+                error("expression can't be explicit here " + describeType(decl), "", "",
                       decl->at,CompilationError::invalid_type);
                 */
             }
             if ( decl->dim.size() && decl->ref ) {
-                error("can't declare an array of references, " + decl->describe(), "", "",
+                error("can't declare an array of references, " + describeType(decl), "", "",
                       decl->at,CompilationError::invalid_type);
             }
             for ( auto di : decl->dim ) {
                 if ( di<=0 ) {
-                    error("array dimension can't be 0 or less, " + decl->describe(), "", "",
+                    error("array dimension can't be 0 or less, " + describeType(decl), "", "",
                           decl->at,CompilationError::invalid_array_dimension);
                 }
             }
@@ -120,31 +133,31 @@ namespace das {
                     for ( const auto & na : decl->argNames ) {
                         allNames += na + " ";
                     }
-                    error("malformed type, " + decl->describe(), allNames, "",
+                    error("malformed type, " + describeType(decl), allNames, "",
                         decl->at,CompilationError::invalid_type);
                 }
             }
             if ( decl->baseType==Type::tVoid ) {
                 if ( decl->dim.size() ) {
-                    error("can't declare an array of void, " + decl->describe(), "", "",
+                    error("can't declare an array of void, " + describeType(decl), "", "",
                           decl->at,CompilationError::invalid_type);
                 }
                 if ( decl->ref ) {
-                    error("can't declare a void reference, " + decl->describe(), "", "",
+                    error("can't declare a void reference, " + describeType(decl), "", "",
                           decl->at,CompilationError::invalid_type);
                 }
             } else if ( decl->baseType==Type::tPointer ) {
                 if ( auto ptrType = decl->firstType ) {
                     if ( ptrType->ref ) {
-                        error("can't declare a pointer to a reference, " + decl->describe(), "", "",
+                        error("can't declare a pointer to a reference, " + describeType(decl), "", "",
                               ptrType->at,CompilationError::invalid_type);
                     }
                     if ( decl->smartPtr ) {
                         if ( ptrType->baseType != Type::tHandle ) {
-                            error("can't declare a smart pointer to anything other than annotation, " + decl->describe(), "", "",
+                            error("can't declare a smart pointer to anything other than annotation, " + describeType(decl), "", "",
                                 ptrType->at,CompilationError::invalid_type);
                         } else if ( !ptrType->annotation->isSmart() ) {
-                            error("this annotation does not support smart pointers, " + decl->describe(), "", "",
+                            error("this annotation does not support smart pointers, " + describeType(decl), "", "",
                                 ptrType->at,CompilationError::invalid_type);
                         }
                     }
@@ -162,19 +175,19 @@ namespace das {
             } else if ( decl->baseType==Type::tArray ) {
                 if ( auto arrayType = decl->firstType ) {
                     if ( arrayType->isAutoOrAlias() ) {
-                        error("array type is not fully resolved, " + arrayType->describe(), "", "",
+                        error("array type is not fully resolved, " + describeType(arrayType), "", "",
                               arrayType->at,CompilationError::invalid_array_type);
                     }
                     if ( arrayType->ref ) {
-                        error("can't declare an array of references, " + arrayType->describe(), "", "",
+                        error("can't declare an array of references, " + describeType(arrayType), "", "",
                               arrayType->at,CompilationError::invalid_array_type);
                     }
                     if ( arrayType->baseType==Type::tVoid) {
-                        error("can't declare a void array, " + arrayType->describe(), "", "",
+                        error("can't declare a void array, " + describeType(arrayType), "", "",
                               arrayType->at,CompilationError::invalid_array_type);
                     }
-                    if ( !arrayType->isLocal() ) {
-                        error("array type has to be 'local', " + arrayType->describe(), "", "",
+                    if ( !arrayType->canBePlacedInContainer() ) {
+                        error("can't have array of non-trivial type, " + describeType(arrayType), "", "",
                               arrayType->at,CompilationError::invalid_type);
                     }
                     verifyType(arrayType);
@@ -182,30 +195,30 @@ namespace das {
             } else if ( decl->baseType==Type::tTable ) {
                 if ( auto keyType = decl->firstType ) {
                     if ( keyType->isAutoOrAlias() ) {
-                        error("table key is not fully resolved, " + keyType->describe(), "", "",
+                        error("table key is not fully resolved, " + describeType(keyType), "", "",
                               keyType->at,CompilationError::invalid_array_type);
                     }
                     if ( keyType->ref ) {
-                        error("table key can't be declared as a reference, " + keyType->describe(), "", "",
+                        error("table key can't be declared as a reference, " + describeType(keyType), "", "",
                               keyType->at,CompilationError::invalid_table_type);
                     }
                     if ( !keyType->isWorkhorseType() ) {
-                        error("table key has to be declare as a basic 'hashable' type, " + keyType->describe(), "", "",
+                        error("table key has to be declare as a basic 'hashable' type, " + describeType(keyType), "", "",
                               keyType->at,CompilationError::invalid_table_type);
                     }
                     verifyType(keyType);
                 }
                 if ( auto valueType = decl->secondType ) {
                     if ( valueType->isAutoOrAlias() ) {
-                        error("table value is not fully resolved, " + valueType->describe(), "", "",
+                        error("table value is not fully resolved, " + describeType(valueType), "", "",
                               valueType->at,CompilationError::invalid_array_type);
                     }
                     if ( valueType->ref ) {
-                        error("table value can't be declared as a reference, " + valueType->describe(), "", "",
+                        error("table value can't be declared as a reference, " + describeType(valueType), "", "",
                               valueType->at,CompilationError::invalid_table_type);
                     }
-                    if ( !valueType->isLocal() ) {
-                        error("table value has to be 'local', " + valueType->describe(), "", "",
+                    if ( !valueType->canBePlacedInContainer() ) {
+                        error("can't have table value of non-trivial type, " + describeType(valueType), "", "",
                               valueType->at,CompilationError::invalid_type);
                     }
                     verifyType(valueType);
@@ -213,14 +226,14 @@ namespace das {
             } else if ( decl->baseType==Type::tBlock || decl->baseType==Type::tFunction || decl->baseType==Type::tLambda ) {
                 if ( auto resultType = decl->firstType ) {
                     if ( !resultType->isReturnType() ) {
-                        error("not a valid return type, " + resultType->describe(), "", "",
+                        error("not a valid return type, " + describeType(resultType), "", "",
                               resultType->at,CompilationError::invalid_return_type);
                     }
                     verifyType(resultType);
                 }
                 for ( auto & argType : decl->argTypes ) {
                     if ( argType->ref && argType->isRefType() ) {
-                        error("can't pass a boxed type by a reference, " + argType->describe(), "", "",
+                        error("can't pass a boxed type by a reference, " + describeType(argType), "", "",
                               argType->at,CompilationError::invalid_argument_type);
                     }
                     verifyType(argType,true);
@@ -228,7 +241,7 @@ namespace das {
             } else if ( decl->baseType==Type::tTuple ) {
                 for ( auto & argType : decl->argTypes ) {
                     if ( argType->ref ) {
-                        error("tuple element can't be ref, " + argType->describe(), "", "",
+                        error("tuple element can't be ref, " + describeType(argType), "", "",
                               argType->at,CompilationError::invalid_type);
                     }
                     verifyType(argType);
@@ -236,7 +249,7 @@ namespace das {
             } else if ( decl->baseType==Type::tVariant ) {
                 for ( auto & argType : decl->argTypes ) {
                     if ( argType->ref ) {
-                        error("variant element can't be ref, " + argType->describe(), "", "",
+                        error("variant element can't be ref, " + describeType(argType), "", "",
                               argType->at,CompilationError::invalid_type);
                     }
                     verifyType(argType);
@@ -540,35 +553,16 @@ namespace das {
         }
 
         vector<FunctionPtr> findTypedFuncAddr ( const string & name, const vector<TypeDeclPtr> & arguments, const TypeDeclPtr & resType ) const {
-            string moduleName, funcName;
-            splitTypeName(name, moduleName, funcName);
-            vector<FunctionPtr> result;
-            auto inWhichModule = getSearchModule(moduleName);
-            TextWriter ss;
-            for ( auto & arg : arguments ) {
-                ss << " " << arg->getMangledName();
+            vector<FunctionPtr> funcs =  findMatchingFunctions(name, arguments, false, false);
+            for ( auto it = funcs.begin(); it != funcs.end();  ) {
+                const auto & mf = *it;
+                if ( !mf->result->isSameType(*resType,RefMatters::yes,ConstMatters::yes,TemporaryMatters::yes) ) {
+                    it = funcs.erase(it);
+                } else {
+                    ++ it;
+                }
             }
-            string mangledNamePostfix = ss.str();
-            program->library.foreach([&](Module * mod) -> bool {
-                string mangledName;
-                if ( !mod->name.empty() ) {
-                    mangledName = "@" + mod->name + "::";
-                }
-                mangledName = mangledName + funcName + mangledNamePostfix;
-                auto itFn = mod->functions.find(mangledName);
-                if ( itFn != mod->functions.end() ) {
-                    const auto & pFn = itFn->second;
-                    if ( isVisibleFunc(inWhichModule,getFunctionVisModule(pFn.get())) ) {
-                        if ( canCallPrivate(pFn,inWhichModule,program->thisModule.get()) ) {
-                            if ( pFn->result->isSameType(*resType, RefMatters::yes, ConstMatters::yes, TemporaryMatters::yes) ) {
-                                result.push_back(pFn);
-                            }
-                        }
-                    }
-                }
-                return true;
-            },moduleName);
-            return result;
+            return funcs;
         }
 
         vector<FunctionPtr> findCandidates ( const string & name, const vector<TypeDeclPtr> & ) const {
@@ -766,7 +760,7 @@ namespace das {
             vector<string> aliases;
             type->collectAliasList(aliases);
             TextWriter ss;
-            ss << "don't know what " << type->describe() << " is";
+            ss << "don't know what " << describeType(type) << " is";
             for (auto & aa : aliases) {
                 ss << "; unknown type " << aa;
             }
@@ -806,7 +800,7 @@ namespace das {
                 }
                 if (!isMatchingArgument(pFn, pFn->arguments[fnArgIndex]->type, arg->value->type,inferAuto,inferBlock)) {
                     ss << "\t\tinvalid argument " << arg->name << ". expecting "
-                        << pFn->arguments[fnArgIndex]->type->describe() << ", passing " << arg->value->type->describe() << "\n";
+                        << describeType(pFn->arguments[fnArgIndex]->type) << ", passing " << describeType(arg->value->type) << "\n";
                     if (arg->value->type->isAlias()) {
                         ss << "\t\t" << reportAliasError(arg->value->type) << "\n";
                     }
@@ -833,7 +827,7 @@ namespace das {
                 auto & passType = types[ai];
                 if (!isMatchingArgument(pFn, arg->type, passType, inferAuto, inferBlock)) {
                     ss << "\t\tinvalid argument " << arg->name << ". expecting "
-                        << arg->type->describe() << ", passing " << passType->describe() << "\n";
+                        << describeType(arg->type) << ", passing " << describeType(passType) << "\n";
                     if ( passType->isAlias() ) {
                         ss << "\t\t" << reportAliasError(passType) << "\n";
                     }
@@ -872,7 +866,7 @@ namespace das {
             return result;
         }
 
-        vector<FunctionPtr> findMatchingFunctions ( const string & name, const vector<TypeDeclPtr> & types, bool inferBlock = false ) const {
+        vector<FunctionPtr> findMatchingFunctions ( const string & name, const vector<TypeDeclPtr> & types, bool inferBlock = false, bool visCheck = true ) const {
             string moduleName, funcName;
             splitTypeName(name, moduleName, funcName);
             vector<FunctionPtr> result;
@@ -882,7 +876,7 @@ namespace das {
                 if ( itFnList != mod->functionsByName.end() ) {
                     auto & goodFunctions = itFnList->second;
                     for ( auto & pFn : goodFunctions ) {
-                        if ( isVisibleFunc(inWhichModule,getFunctionVisModule(pFn.get()) ) ) {
+                        if ( !visCheck || isVisibleFunc(inWhichModule,getFunctionVisModule(pFn.get()) ) ) {
                             if ( canCallPrivate(pFn,inWhichModule,program->thisModule.get()) ) {
                                 if ( isFunctionCompatible(pFn, types, false, inferBlock) ) {
                                     result.push_back(pFn);
@@ -948,63 +942,83 @@ namespace das {
                                     const LineInfo & at, const vector<FunctionPtr> & candidateFunctions,
             const vector<TypeDeclPtr> & types, bool inferAuto, bool inferBlocks, bool reportDetails,
                                     CompilationError cerror = CompilationError::function_not_found) {
-            TextWriter ss;
-            if ( candidateFunctions.size() > 1 ) {
-                ss << "candidates:\n";
-            } else if ( candidateFunctions.size()==1 ) {
-                ss << "\ncandidate function:\n";
-            }
-            string moduleName, funcName;
-            splitTypeName(name, moduleName, funcName);
-            auto inWhichModule = getSearchModule(moduleName);
-            for ( auto & missFn : candidateFunctions ) {
-                ss << "\t";
-                if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
-                    ss << missFn->module->name << "::";
-                ss << missFn->describe() << "\n";
-                if ( reportDetails ) {
-                    ss << describeMismatchingFunction(missFn, types, inferAuto, inferBlocks);
+            if ( verbose ) {
+                TextWriter ss;
+                if ( candidateFunctions.size() > 1 ) {
+                    ss << "candidates:\n";
+                } else if ( candidateFunctions.size()==1 ) {
+                    ss << "\ncandidate function:\n";
                 }
-                auto visM = getFunctionVisModule(missFn.get());
-                if ( !isVisibleFunc(inWhichModule,visM) ) {
-                    ss << "\t\tmodule " << visM->name << " is not visible directly from ";
-                    if ( inWhichModule->name.empty()) {
-                        ss << "the current module\n";
+                string moduleName, funcName;
+                splitTypeName(name, moduleName, funcName);
+                auto inWhichModule = getSearchModule(moduleName);
+                for ( auto & missFn : candidateFunctions ) {
+                    ss << "\t";
+                    if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
+                        ss << missFn->module->name << "::";
+                    ss << describeFunction(missFn);
+                    if ( missFn->builtIn ) {
+                        ss << " // builtin";
                     } else {
-                        ss << inWhichModule->name << "\n";
-                    }
-                }
-                if ( missFn->privateFunction && canCallPrivate(missFn,inWhichModule,program->thisModule.get()) ) {
-                    ss << "\t\tfunction is private";
-                    if ( missFn->module && !missFn->module->name.empty() ) {
-                        ss << " to module " << missFn->module->name;
+                        ss << " at " << missFn->at.describe();
                     }
                     ss << "\n";
+                    if ( reportDetails ) {
+                        ss << describeMismatchingFunction(missFn, types, inferAuto, inferBlocks);
+                    }
+                    auto visM = getFunctionVisModule(missFn.get());
+                    if ( !isVisibleFunc(inWhichModule,visM) ) {
+                        ss << "\t\tmodule " << visM->name << " is not visible directly from ";
+                        if ( inWhichModule->name.empty()) {
+                            ss << "the current module\n";
+                        } else {
+                            ss << inWhichModule->name << "\n";
+                        }
+                    }
+                    if ( missFn->privateFunction && canCallPrivate(missFn,inWhichModule,program->thisModule.get()) ) {
+                        ss << "\t\tfunction is private";
+                        if ( missFn->module && !missFn->module->name.empty() ) {
+                            ss << " to module " << missFn->module->name;
+                        }
+                        ss << "\n";
+                    }
                 }
+                error(extra, ss.str(), "", at, cerror);
+            } else {
+                error(extra, "", "", at, cerror);
             }
-            error(extra, ss.str(), "", at, cerror);
         }
 
         void reportFunctionNotFound( const string & , const string & extra,
                                     const LineInfo & at, const vector<FunctionPtr> & candidateFunctions,
                                     const vector<MakeFieldDeclPtr> & arguments, bool inferAuto, bool inferBlocks, bool reportDetails ,
                                     CompilationError cerror = CompilationError::function_not_found) {
-            TextWriter ss;
-            if ( candidateFunctions.size() > 1 ) {
-                ss << "candidates:\n";
-            } else if ( candidateFunctions.size()==1 ) {
-                ss << "\ncandidate function:\n";
-            }
-            for ( auto & missFn : candidateFunctions ) {
-                ss << "\t";
-                if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
-                    ss << missFn->module->name << "::";
-                ss << missFn->describe() << "\n";
-                if ( reportDetails ) {
-                    ss << describeMismatchingFunction(missFn, arguments, inferAuto, inferBlocks);
+            if ( verbose ) {
+                TextWriter ss;
+                if ( candidateFunctions.size() > 1 ) {
+                    ss << "candidates:\n";
+                } else if ( candidateFunctions.size()==1 ) {
+                    ss << "\ncandidate function:\n";
                 }
+                for ( auto & missFn : candidateFunctions ) {
+                    ss << "\t";
+                    if ( missFn->module && !missFn->module->name.empty() && !(missFn->module->name=="$") )
+                        ss << missFn->module->name << "::";
+                    ss << describeFunction(missFn);
+                    if ( missFn->builtIn ) {
+                        ss << " // builtin";
+                    } else if ( missFn->at.line ) {
+                        ss << " at " << missFn->at.describe();
+                    }
+                    ss << "\n";
+                    if ( reportDetails ) {
+                        ss << describeMismatchingFunction(missFn, arguments, inferAuto, inferBlocks);
+                    }
+                }
+                error(extra, ss.str(), "", at, cerror);
+            } else {
+                error(extra, "", "", at, cerror);
             }
-            error(extra, ss.str(), "", at, cerror);
         }
 
         bool hasUserConstructor ( const string & sna ) const {
@@ -1024,14 +1038,25 @@ namespace das {
                 }
             }
             if ( customCount && genCount ) {
-                string candidates = program->describeCandidates(fnList);
-                error("both generated and custom " + fnList[0]->name + " functions exist for " + fnList[0]->describe(), candidates, "",
-                    at, CompilationError::function_not_found);
+                if ( verbose ) {
+                    string candidates = program->describeCandidates(fnList);
+                    error("both generated and custom " + fnList[0]->name + " functions exist for " + describeFunction(fnList[0]), candidates, "",
+                        at, CompilationError::function_not_found);
+                } else {
+                    error("both generated and custom " + fnList[0]->name + " functions exist", "", "",
+                        at, CompilationError::function_not_found);
+
+                }
                 return false;
             } else if ( customCount>1 ) {
-                string candidates = program->describeCandidates(fnList);
-                error("too many custom  " + fnList[0]->name + " functions exist for " + fnList[0]->describe(), candidates, "",
-                    at,CompilationError::function_not_found);
+                if ( verbose ) {
+                    string candidates = program->describeCandidates(fnList);
+                    error("too many custom  " + fnList[0]->name + " functions exist for " + describeFunction(fnList[0]), candidates, "",
+                        at,CompilationError::function_not_found);
+                } else {
+                    error("too many custom  " + fnList[0]->name + " functions exist", "", "",
+                        at,CompilationError::function_not_found);
+                }
                 return false;
             } else {
                 return true;
@@ -1042,7 +1067,9 @@ namespace das {
             vector<TypeDeclPtr> argDummy;
             argDummy.push_back(make_smart<TypeDecl>(*left));
             argDummy.push_back(make_smart<TypeDecl>(*right));
-            return findMatchingFunctions("_::clone", argDummy);
+            auto clones = findMatchingFunctions("_::clone", argDummy);
+            applyLSP(argDummy, clones);
+            return clones;
         }
 
         bool verifyCloneFunc ( const vector<FunctionPtr> & fnList, const LineInfo & at ) const {
@@ -1052,7 +1079,9 @@ namespace das {
         vector<FunctionPtr> getFinalizeFunc ( const TypeDeclPtr & subexpr ) const {
             vector<TypeDeclPtr> argDummy;
             argDummy.push_back(make_smart<TypeDecl>(*subexpr));
-            return findMatchingFunctions("_::finalize", argDummy);
+            auto fins = findMatchingFunctions("_::finalize", argDummy);
+            applyLSP(argDummy, fins);
+            return fins;
         }
 
         bool verifyFinalizeFunc ( const vector<FunctionPtr> & fnList, const LineInfo & at ) const {
@@ -1134,15 +1163,14 @@ namespace das {
             if ( td->isAlias() ) {
                 if ( auto ta = inferAlias(td) ) {
                     if ( ta->isAutoOrAlias() ) {
-                        ta = inferAlias(td);
-                        error("kaboom. can't be infer " + td->describe(),  "", "",
+                        error("internal error. can't be inferred " + describeType(td),  "", "",
                             td->at, CompilationError::invalid_type);
                         return td;
                     }
                     return ta;
                 } else {
                     ta = inferAlias(td);
-                    error("can't be inferred " + td->describe(),  "", "",
+                    error("can't be inferred " + describeType(td),  "", "",
                         td->at, CompilationError::invalid_type);
                 }
             }
@@ -1262,7 +1290,7 @@ namespace das {
                     decl.type->sanitize();
                     reportAstChanged();
                 } else {
-                    error("undefined structure field type " + decl.type->describe(),  "", "",
+                    error("undefined structure field type " + describeType(decl.type),  "", "",
                         decl.at, CompilationError::invalid_structure_field_type );
                 }
             }
@@ -1270,7 +1298,7 @@ namespace das {
                 auto varT = TypeDecl::inferGenericType(decl.type, decl.init->type);
                 if ( !varT ) {
                     error("structure field initialization type can't be infered, "
-                          + decl.type->describe() + " = " + decl.init->type->describe(), "", "",
+                          + describeType(decl.type) + " = " + describeType(decl.init->type), "", "",
                           decl.at, CompilationError::invalid_structure_field_type );
                 } else {
                     TypeDecl::applyAutoContracts(varT, decl.type);
@@ -1294,16 +1322,16 @@ namespace das {
                 if ( decl.init->type ) {
                     if ( !canCopyOrMoveType(decl.type,decl.init->type,TemporaryMatters::yes) ) {
                         error("structure field initialization type mismatch, "
-                              + decl.type->describe() + " = " + decl.init->type->describe(),  "", "",
+                              + describeType(decl.type) + " = " + describeType(decl.init->type),  "", "",
                             decl.at,CompilationError::invalid_initialization_type);
                     } else if ( !decl.type->canCopy() && !decl.moveSemantics ) {
-                        error("field " + decl.name + " can't be copied, use <- instead; " + decl.type->describe(), "", "",
+                        error("field " + decl.name + " can't be copied, use <- instead; " + describeType(decl.type), "", "",
                               decl.init->at, CompilationError::invalid_initialization_type );
                     } else if ( !decl.init->type->canCopy() && !decl.init->type->canMove() ) {
-                        error("field " + decl.name + "can't be initialized at all; " + decl.init->type->describe(),  "", "",
+                        error("field " + decl.name + "can't be initialized at all; " + describeType(decl.init->type),  "", "",
                             decl.at,CompilationError::invalid_initialization_type);
                     } else if (decl.moveSemantics && decl.init->type->isConst()) {
-                        error("can't move from a constant value " + decl.init->type->describe(), "", "",
+                        error("can't move from a constant value " + describeType(decl.init->type), "", "",
                             decl.init->at, CompilationError::cant_move);
                     }
                 } else if ( !decl.type->isAuto() ){
@@ -1370,7 +1398,7 @@ namespace das {
                     var->type = aT;
                     reportAstChanged();
                 } else {
-                    error("undefined global variable type " + var->type->describe(),  "", "",
+                    error("undefined global variable type " + describeType(var->type),  "", "",
                         var->at, CompilationError::invalid_type );
                 }
             }
@@ -1381,7 +1409,7 @@ namespace das {
                 auto varT = TypeDecl::inferGenericInitType(var->type, var->init->type);
                 if ( !varT || varT->isAlias() ) {
                     error("global variable " + var->name + " initialization type can't be infered, "
-                          + var->type->describe() + " = " + var->init->type->describe(), "", "",
+                          + describeType(var->type) + " = " + describeType(var->init->type), "", "",
                           var->at, CompilationError::cant_infer_mismatching_restrictions );
                 } else {
                     varT->ref = false;
@@ -1391,14 +1419,14 @@ namespace das {
                 }
             } else if ( !canCopyOrMoveType(var->type,var->init->type,TemporaryMatters::no) ) {
                 error("global variable " + var->name + " initialization type mismatch, "
-                      + var->type->describe() + " = " + var->init->type->describe(),  "", "",
+                      + describeType(var->type) + " = " + describeType(var->init->type),  "", "",
                     var->at, CompilationError::invalid_initialization_type);
             } else if ( var->type->ref && !var->type->isConst() && var->init->type->isConst() ) {
                 error("global variable " + var->name + " initialization type mismatch, const matters "
-                      + var->type->describe() + " = " + var->init->type->describe(),  "", "",
+                      + describeType(var->type) + " = " + describeType(var->init->type),  "", "",
                     var->at, CompilationError::invalid_initialization_type);
             } else if ( !var->init_via_clone && (!var->init->type->canCopy() && !var->init->type->canMove()) ) {
-                error("global variable " + var->name + " can't be initialized at all. " + var->type->describe(), "", "",
+                error("global variable " + var->name + " can't be initialized at all. " + describeType(var->type), "", "",
                       var->at, CompilationError::invalid_initialization_type);
             } else if ( var->init_via_move && var->init->type->isConst() ) {
                 error("global variable " + var->name + " can't init (move) from a constant value",  "", "",
@@ -1450,9 +1478,13 @@ namespace das {
                       var->at, CompilationError::invalid_variable_type);
             if ( var->global_shared && !var->type->isShareable() ) {
                 if ( !(var->type->isSimpleType(Type::tLambda) && program->policies.allow_shared_lambda) ) {
-                    error("this variable type can't be shared, " + var->type->describe(), "", "",
+                    error("this variable type can't be shared, " + describeType(var->type), "", "",
                         var->at, CompilationError::invalid_variable_type);
                 }
+            }
+            if ( !var->init && var->type->hasNonTrivialCtor() ) {
+                error("global variable of type " + describeType(var->type) + " needs to be initialized", "", "",
+                    var->at, CompilationError::invalid_variable_type);
             }
             verifyType(var->type);
             return Visitor::visitGlobalLet(var);
@@ -1477,7 +1509,7 @@ namespace das {
                     var->type = aT;
                     reportAstChanged();
                 } else {
-                    error("undefined function argument type " + var->type->describe(),  "", "",
+                    error("undefined function argument type " + describeType(var->type),  "", "",
                         var->at, CompilationError::type_not_found );
                 }
             }
@@ -1490,7 +1522,7 @@ namespace das {
                 auto varT = TypeDecl::inferGenericType(arg->type, arg->init->type);
                 if ( !varT ) {
                     error("generic argument type can't be infered, "
-                        + arg->type->describe() + " = " + arg->init->type->describe(), "", "",
+                        + describeType(arg->type) + " = " + describeType(arg->init->type), "", "",
                         arg->at, CompilationError::cant_infer_generic );
                 } else {
                     TypeDecl::applyAutoContracts(varT, arg->type);
@@ -1501,13 +1533,13 @@ namespace das {
                 }
             }
             if ( !arg->init->type || !arg->type->isSameType(*arg->init->type, RefMatters::no, ConstMatters::no, TemporaryMatters::no) ) {
-                error("function argument default value type mismatch " + arg->type->describe()
-                    + " vs " + (arg->init->type ? arg->init->type->describe() : "???"),  "", "",
+                error("function argument default value type mismatch " + describeType(arg->type)
+                    + " vs " + (arg->init->type ? describeType(arg->init->type) : "???"),  "", "",
                     arg->init->at, CompilationError::invalid_type);
             }
             if (arg->init->type && arg->type->ref && !arg->init->type->ref ) {
-                error("function argument default value type mismatch " + arg->type->describe()
-                    + " vs " + arg->init->type->describe() + ", reference matters", "", "",
+                error("function argument default value type mismatch " + describeType(arg->type)
+                    + " vs " + describeType(arg->init->type) + ", reference matters", "", "",
                     arg->init->at, CompilationError::invalid_type);
             }
             return Visitor::visitArgumentInit(f, arg, that);
@@ -1537,16 +1569,16 @@ namespace das {
                     func->result->sanitize();
                     reportAstChanged();
                 } else {
-                    error("undefined function result type " + func->result->describe(),  "", "",
+                    error("undefined function result type " + describeType(func->result),  "", "",
                         func->at, CompilationError::type_not_found );
                 }
             }
             verifyType(func->result);
             if ( !func->result->isReturnType() ) {
-                error("not a valid function return type " + func->result->describe(), "", "",
+                error("not a valid function return type " + describeType(func->result), "", "",
                       func->result->at,CompilationError::invalid_return_type);
             }
-            if ( func->result->isRefType() ) {
+            if ( func->result->isRefType() && !func->result->ref ) {
                 if ( func->result->canCopy() ) {
                     func->copyOnReturn = true;
                     func->moveOnReturn = false;
@@ -1557,7 +1589,7 @@ namespace das {
                     // the error will be reported in the inferReturnType
                     /*
                     error("this type can't be copied or moved. not a valid function return type "
-                          + func->result->describe(),func->result->at,CompilationError::invalid_return_type);
+                          + describeType(func->result),func->result->at,CompilationError::invalid_return_type);
                     */
                 }
             } else {
@@ -1565,6 +1597,7 @@ namespace das {
                 func->moveOnReturn = false;
             }
             // if any of this asserts failed, there is logic error in how we pop
+            DAS_ASSERT(loop.size()==0);
             DAS_ASSERT(scopes.size()==0);
             DAS_ASSERT(blocks.size()==0);
             DAS_ASSERT(local.size()==0);
@@ -1631,8 +1664,14 @@ namespace das {
                 c->type->constant = true;
             } else if ( c->baseType==Type::tPointer ) {
                 c->type = make_smart<TypeDecl>(c->baseType);
-                c->type->constant = true;
-                c->type->smartPtr = (static_cast<ExprConstPtr *>(c))->isSmartPtr;
+                auto cptr = static_cast<ExprConstPtr *>(c);
+                c->type->smartPtr = cptr->isSmartPtr;
+                if ( cptr->ptrType ) {
+                    c->type->firstType = make_smart<TypeDecl>(*cptr->ptrType);
+                    c->type->constant = c->type->firstType->constant;
+                } else {
+                    c->type->constant = true;
+                }
             } else {
                 c->type = make_smart<TypeDecl>(c->baseType);
                 c->type->constant = true;
@@ -1668,7 +1707,7 @@ namespace das {
                 if ( !expr->subexpr->type ) return Visitor::visit(expr);
                 expr->subexpr = Expression::autoDereference(expr->subexpr);
                 if ( !expr->subexpr->type->isSimpleType(Type::tInt) ) {
-                    error("label type has to be int, not " + expr->subexpr->type->describe(),  "", "",
+                    error("label type has to be int, not " + describeType(expr->subexpr->type),  "", "",
                         expr->at, CompilationError::invalid_label);
                 } else {
                     if ( enableInferTimeFolding ) {
@@ -1705,8 +1744,7 @@ namespace das {
     // ExprLabel
         virtual void preVisit ( ExprLabel * expr ) override {
             Visitor::preVisit(expr);
-            auto total = ++labels[expr->label];
-            if ( total != 1 ) {
+            if ( !labels.insert(expr->label).second ) {
                 error("duplicate label " + to_string(expr->label),  "", "",
                     expr->at, CompilationError::invalid_label);
             }
@@ -1721,7 +1759,7 @@ namespace das {
                 error("can only dereference a reference", tw.str(), "",
                     expr->at, CompilationError::invalid_type);
             } else if ( !expr->subexpr->type->isSimpleType() && !expr->subexpr->type->isPointer() && !expr->subexpr->type->isEnum() ) {
-                error("can only dereference a simple type, not a " + expr->subexpr->type->describe(),  "", "",
+                error("can only dereference a simple type, not a " + describeType(expr->subexpr->type),  "", "",
                     expr->at, CompilationError::invalid_type);
             } else {
                 expr->type = make_smart<TypeDecl>(*expr->subexpr->type);
@@ -1738,13 +1776,13 @@ namespace das {
                         expr->funcType = aT;
                         reportAstChanged();
                     } else {
-                        error("undefined address expression type " + expr->funcType->describe(),  "", "",
+                        error("undefined address expression type " + describeType(expr->funcType),  "", "",
                             expr->at, CompilationError::type_not_found);
                         return Visitor::visit(expr);
                     }
                 }
                 if (expr->funcType->isAuto()) {
-                    error("function of undefined type " + expr->funcType->describe(),  "", "",
+                    error("function of undefined type " + describeType(expr->funcType),  "", "",
                         expr->at, CompilationError::type_not_found);
                     return Visitor::visit(expr);
                 }
@@ -1772,12 +1810,12 @@ namespace das {
                 error("function not found " + expr->target,  "", "",
                     expr->at, CompilationError::function_not_found);
             } else {
-                string candidates = program->describeCandidates(fns);
+                string candidates = verbose ? program->describeCandidates(fns) : "";
                 error("function not found " + expr->target, candidates, "",
                     expr->at, CompilationError::function_not_found);
             }
             if (expr->func && expr->func->builtIn) {
-                error("can't get address of builtin function " + expr->func->describe(),  "", "",
+                error("can't get address of builtin function " + describeFunction(expr->func),  "", "",
                     expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
@@ -1817,8 +1855,10 @@ namespace das {
                     expr->at, CompilationError::cant_dereference);
             } else {
                 if ( !safeExpression(expr) ) {
-                    error("address of reference requires unsafe",  "", "",
-                        expr->at, CompilationError::unsafe);
+                    if ( !expr->subexpr->type->temporary ) { // address of temp type is temp, but its safe
+                        error("address of reference requires unsafe",  "", "",
+                            expr->at, CompilationError::unsafe);
+                    }
                 }
                 expr->type = make_smart<TypeDecl>(Type::tPointer);
                 expr->type->firstType = make_smart<TypeDecl>(*expr->subexpr->type);
@@ -1872,17 +1912,17 @@ namespace das {
                 error("can only dereference a pointer to something",  "", "",
                     expr->at, CompilationError::cant_dereference);
             } else if ( !seT->firstType->isSameType(*dvT,RefMatters::no, ConstMatters::no, TemporaryMatters::yes) ) {
-                error("default value type mismatch in " + seT->firstType->describe() + " vs "
-                      + dvT->describe(), "", "",
+                error("default value type mismatch in " + describeType(seT->firstType) + " vs "
+                      + describeType(dvT), "", "",
                     expr->at, CompilationError::cant_dereference);
             } else if ( seT->isRef() && !seT->isConst() && dvT->isConst() ) {
-                error("default value type mismatch, constant matters in " + seT->describe() + " vs "
-                      + dvT->describe(),  "", "",
+                error("default value type mismatch, constant matters in " + describeType(seT) + " vs "
+                      + describeType(dvT),  "", "",
                     expr->at, CompilationError::cant_dereference);
             } else {
                 expr->type = make_smart<TypeDecl>(*dvT);
                 expr->type->constant |= expr->subexpr->type->constant;
-                propagateTempType(expr->subexpr->type, expr->type);
+                propagateTempType(expr->subexpr->type, expr->type); // t?# ?? def = #t
                 propagateAlwaysSafe(expr->subexpr);
             }
             return Visitor::visit(expr);
@@ -1926,6 +1966,21 @@ namespace das {
                     expr->at, CompilationError::invalid_argument_type);
             }
             expr->type = make_smart<TypeDecl>(Type::tVoid);
+            return Visitor::visit(expr);
+        }
+    // ExprQuote
+        virtual ExpressionPtr visit ( ExprQuote * expr ) override {
+            if ( expr->arguments.size()!=1  ) {
+                error("quote(expr) only. can only return one expression tree",  "", "",
+                    expr->at, CompilationError::invalid_argument_count);
+                return Visitor::visit(expr);
+            }
+            // infer
+            expr->type = make_smart<TypeDecl>(Type::tPointer);
+            expr->type->smartPtr = true;
+            expr->type->smartPtrNative = true;
+            expr->type->firstType = make_smart<TypeDecl>(Type::tHandle);
+            expr->type->firstType->annotation = (TypeAnnotation *) Module::require("ast")->findAnnotation("Expression").get();
             return Visitor::visit(expr);
         }
     // ExprDebug
@@ -1975,13 +2030,13 @@ namespace das {
                     expr->iterType = aT;
                     reportAstChanged();
                 } else {
-                    error("undefined generator type " + expr->iterType->describe(),  "", "",
+                    error("undefined generator type " + describeType(expr->iterType),  "", "",
                         expr->at, CompilationError::type_not_found);
                     return Visitor::visit(expr);
                 }
             }
             if ( expr->iterType->isAuto() ) {
-                error("generator of undefined type " + expr->iterType->describe(),  "", "",
+                error("generator of undefined type " + describeType(expr->iterType),  "", "",
                     expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             } else if ( expr->iterType->isVoid() ) {
@@ -2273,17 +2328,17 @@ namespace das {
             expr->arguments[0] = Expression::autoDereference(expr->arguments[0]);
             auto blockT = expr->arguments[0]->type;
             if ( blockT->isAutoOrAlias() ) {
-                error("invoke argument not fully infered " + blockT->describe(),  "", "",
+                error("invoke argument not fully infered " + describeType(blockT),  "", "",
                     expr->at, CompilationError::invalid_argument_type);
                 return Visitor::visit(expr);
             }
             if ( !blockT->isGoodBlockType() && !blockT->isGoodFunctionType() && !blockT->isGoodLambdaType() ) {
-                error("expecting block, or function, or lambda, not a " + blockT->describe(),  "", "",
+                error("expecting block, or function, or lambda, not a " + describeType(blockT),  "", "",
                     expr->at, CompilationError::invalid_argument_type);
                  return Visitor::visit(expr);
             }
             if ( expr->arguments.size()-1 != blockT->argTypes.size() ) {
-                error("invalid number of arguments, expecting " + blockT->describe(), "", "",
+                error("invalid number of arguments, expecting " + describeType(blockT), "", "",
                       expr->at, CompilationError::invalid_argument_count);
                 return Visitor::visit(expr);
             }
@@ -2294,28 +2349,28 @@ namespace das {
                 auto & passType = expr->arguments[i+1]->type;
                 auto & argType = blockT->argTypes[i];
                 // same type only
-                if ( !argType->isSameType(*passType, RefMatters::no, ConstMatters::no, TemporaryMatters::yes) ) {
-                    error("incomaptible argument " + to_string(i+1) + " " + passType->describe() + " vs "
-                          + argType->describe(),  "", "",
+                if ( !argType->implicit && !argType->isSameType(*passType, RefMatters::no, ConstMatters::no, TemporaryMatters::yes) ) {
+                    error("incomaptible argument " + to_string(i+1) + " " + describeType(passType) + " vs "
+                          + describeType(argType) + ", temporary matters",  "", "",
                         expr->at, CompilationError::invalid_argument_type);
                 }
-                // can't pass non-ref to reff
+                // can't pass non-ref to ref
                 if ( argType->isRef() && !passType->isRef() ) {
                     error("incomaptible argument. can't pass non-ref to ref " + to_string(i+1) + " "
-                        + passType->describe() + " vs " + argType->describe(), "", "",
+                        + describeType(passType) + " vs " + describeType(argType), "", "",
                         expr->at, CompilationError::invalid_argument_type);
                 }
                 // ref types can only add constness
                 if ( argType->isRef() && !argType->constant && passType->constant ) {
                     error("incomaptible argument " + to_string(i+1) + " "
-                        + passType->describe() + " vs " + argType->describe()
+                        + describeType(passType) + " vs " + describeType(argType)
                         + ", passing const to non-const argument", "", "",
                             expr->at, CompilationError::invalid_argument_type);
                 }
                 // pointer types can only add constant
                 if ( argType->isPointer() && !argType->constant && passType->constant ) {
                     error("incomaptible argument " + to_string(i+1)
-                        + " " + passType->describe() + " vs " + argType->describe()
+                        + " " + describeType(passType) + " vs " + describeType(argType)
                         + ", passing const pointer to non-const pointer argument", "", "",
                           expr->at, CompilationError::invalid_argument_type);
                 }
@@ -2415,7 +2470,7 @@ namespace das {
             }
             // TODO: verify
             if ( expr->typeexpr->isAutoOrAlias() ) {
-                error("is " + (expr->typeexpr ? expr->typeexpr->describe() : "...") + " can't be infered", "", "",
+                error("is " + (expr->typeexpr ? describeType(expr->typeexpr) : "...") + " can't be infered", "", "",
                       expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
@@ -2426,20 +2481,20 @@ namespace das {
                     reportAstChanged();
                     return Visitor::visit(expr);
                 } else {
-                    error("undefined is expression type " + expr->typeexpr->describe(), "", "",
+                    error("undefined is expression type " + describeType(expr->typeexpr), "", "",
                           expr->at, CompilationError::type_not_found);
                     return Visitor::visit(expr);
                 }
             }
             if ( expr->typeexpr->isAuto() ) {
-                error("is ... auto is undefined, " + expr->typeexpr->describe(), "", "",
+                error("is ... auto is undefined, " + describeType(expr->typeexpr), "", "",
                       expr->at, CompilationError::typeinfo_auto);
                 return Visitor::visit(expr);
             }
             // TODO: verify, is this even necessary now that we have tests above?
             // if ( !isFullySealedType(expr->typeexpr) ) {
             if ( expr->typeexpr->isAutoOrAlias() ) {
-                error("is " + (expr->typeexpr ? expr->typeexpr->describe() : "...") + " can't be fully infered", "", "",
+                error("is " + (expr->typeexpr ? describeType(expr->typeexpr) : "...") + " can't be fully infered", "", "",
                       expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
@@ -2464,36 +2519,45 @@ namespace das {
                 expr->typeexpr->ref = false;
             }
             // verify
-            if ( !expr->typeexpr  ) {
-                error("typeinfo(" + (expr->typeexpr ? expr->typeexpr->describe() : "...") + ") can't be infered",  "", "",
+            bool allowMissingTypeExpr = false;
+            if ( expr->trait=="builtin_function_exists") {
+                allowMissingTypeExpr = true;
+            }
+            bool allowMissingType = false;
+            if ( expr->trait=="builtin_annotation_exists") {
+                allowMissingType = true;
+            }
+            //
+            if ( !expr->typeexpr && !allowMissingTypeExpr ) {
+                error("typeinfo(" + (expr->typeexpr ? describeType(expr->typeexpr) : "...") + ") can't be infered",  "", "",
                     expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
             auto nErrors = program->errors.size();
-            if ( expr->typeexpr->isAlias() ) {
-                if ( auto eT = inferAlias(expr->typeexpr) ) {
-                    expr->typeexpr = eT;
-                    reportAstChanged();
-                    return Visitor::visit(expr);
-                } else {
-                    error("undefined typeinfo type expression type " + expr->typeexpr->describe(), "", "",
-                          expr->at, CompilationError::type_not_found);
+            if ( expr->typeexpr ) {
+                if ( expr->typeexpr->isAlias() ) {
+                    if ( auto eT = inferAlias(expr->typeexpr) ) {
+                        expr->typeexpr = eT;
+                        reportAstChanged();
+                        return Visitor::visit(expr);
+                    } else if ( !allowMissingType ) {
+                        error("undefined typeinfo type expression type " + describeType(expr->typeexpr), "", "",
+                            expr->at, CompilationError::type_not_found);
+                        return Visitor::visit(expr);
+                    }
+                }
+                if ( expr->typeexpr->isAuto() ) {
+                    error("typeinfo(... auto) is undefined, " + describeType(expr->typeexpr), "", "",
+                        expr->at, CompilationError::typeinfo_auto);
                     return Visitor::visit(expr);
                 }
+                if ( allowMissingType ? expr->typeexpr->isAuto() : expr->typeexpr->isAutoOrAlias() ) {
+                    error("typeinfo(" + (expr->typeexpr ? describeType(expr->typeexpr) : "...") + ") can't be fully infered",  "", "",
+                        expr->at, CompilationError::type_not_found);
+                    return Visitor::visit(expr);
+                }
+                verifyType(expr->typeexpr,true);
             }
-            if ( expr->typeexpr->isAuto() ) {
-                error("typeinfo(... auto) is undefined, " + expr->typeexpr->describe(), "", "",
-                      expr->at, CompilationError::typeinfo_auto);
-                return Visitor::visit(expr);
-            }
-            // TODO: verify. is this even necessary with tests above?
-            // if ( !isFullySealedType(expr->typeexpr) ) {
-            if ( expr->typeexpr->isAutoOrAlias() ) {
-                error("typeinfo(" + (expr->typeexpr ? expr->typeexpr->describe() : "...") + ") can't be fully infered",  "", "",
-                    expr->at, CompilationError::type_not_found);
-                return Visitor::visit(expr);
-            }
-            verifyType(expr->typeexpr,true);
             if ( nErrors==program->errors.size() ) {
                 if ( expr->trait=="sizeof" ) {
                     reportAstChanged();
@@ -2509,13 +2573,13 @@ namespace das {
                         reportAstChanged();
                         return make_smart<ExprConstInt>(expr->at, expr->typeexpr->dim[0]);
                     } else {
-                        error("typeinfo(dim non_array) is prohibited, " + expr->typeexpr->describe(), "", "",
+                        error("typeinfo(dim non_array) is prohibited, " + describeType(expr->typeexpr), "", "",
                               expr->at,CompilationError::typeinfo_dim);
                     }
                 } else if ( expr->trait=="variant_index" || expr->trait=="safe_variant_index" ) {
                     if ( !expr->typeexpr->isGoodVariantType() ) {
                         if (expr->trait == "variant_index") {
-                            error("variant_index only valid for variant, not for " + expr->typeexpr->describe(), "", "",
+                            error("variant_index only valid for variant, not for " + describeType(expr->typeexpr), "", "",
                                 expr->at, CompilationError::invalid_type);
                         } else {
                             reportAstChanged();
@@ -2527,7 +2591,7 @@ namespace das {
                             reportAstChanged();
                             return make_smart<ExprConstInt>(expr->at, index);
                         } else {
-                            error("variant_index variant " + expr->subtrait + " not found in " + expr->typeexpr->describe(), "", "",
+                            error("variant_index variant " + expr->subtrait + " not found in " + describeType(expr->typeexpr), "", "",
                                 expr->at,CompilationError::typeinfo_undefined);
                         }
                     }
@@ -2639,6 +2703,12 @@ namespace das {
                 } else if ( expr->trait=="is_numeric_comparable" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->isNumericComparable());
+                } else if ( expr->trait=="is_local" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->isLocal());
+                } else if ( expr->trait=="can_be_placed_in_container" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canBePlacedInContainer());
                 } else if ( expr->trait=="can_copy" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canCopy());
@@ -2648,12 +2718,27 @@ namespace das {
                 } else if ( expr->trait=="can_clone" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canClone());
+                } else if ( expr->trait=="can_new" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canNew());
                 } else if ( expr->trait=="can_delete" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canDelete());
+                } else if ( expr->trait=="can_delete_ptr" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canDeletePtr());
                 } else if ( expr->trait=="need_delete" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->needDelete());
+                } else if ( expr->trait=="has_nontrivial_ctor" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->hasNonTrivialCtor());
+                } else if ( expr->trait=="has_nontrivial_dtor" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->hasNonTrivialDtor());
+                } else if ( expr->trait=="has_nontrivial_copy" ) {
+                    reportAstChanged();
+                    return make_smart<ExprConstBool>(expr->at, expr->typeexpr->hasNonTrivialCopy());
                 } else if ( expr->trait=="has_field" || expr->trait=="safe_has_field" ) {
                     if ( expr->typeexpr->isStructure() ) {
                         reportAstChanged();
@@ -2668,7 +2753,7 @@ namespace das {
                         } else {
                             error("typeinfo(has_field<" + expr->subtrait
                                   + "> ...) is only defined for structures and handled types, "
-                                    + expr->typeexpr->describe(),  "", "",
+                                    + describeType(expr->typeexpr),  "", "",
                                 expr->at, CompilationError::typeinfo_undefined);
                         }
                     }
@@ -2686,7 +2771,7 @@ namespace das {
                         } else {
                             error("typeinfo(struct_has_annotation<" + expr->subtrait
                                   + "> ...) is only defined for structures, "
-                                    + expr->typeexpr->describe(), "", "",
+                                    + describeType(expr->typeexpr), "", "",
                                 expr->at, CompilationError::typeinfo_undefined);
                         }
                     }
@@ -2718,7 +2803,7 @@ namespace das {
                         } else {
                             error("typeinfo(struct_has_annotation_argument<" + expr->subtrait
                                   + "> ...) is only defined for structures, "
-                                    + expr->typeexpr->describe(),  "", "",
+                                    + describeType(expr->typeexpr),  "", "",
                                 expr->at, CompilationError::typeinfo_undefined);
                         }
                     }
@@ -2765,7 +2850,7 @@ namespace das {
                     } else {
                         error("typeinfo(struct_get_annotation_argument<" + expr->subtrait
                               + "> ...) is only defined for structures, "
-                                + expr->typeexpr->describe(), "", "",
+                                + describeType(expr->typeexpr), "", "",
                             expr->at, CompilationError::typeinfo_undefined);
                     }
                 } else if ( expr->trait=="offsetof" ) {
@@ -2777,13 +2862,46 @@ namespace das {
                             return make_smart<ExprConstInt>(expr->at, decl->offset);
                         } else {
                             error("typeinfo(offsetof<" + expr->subtrait
-                                  + "> ...) of undefined type, " + expr->typeexpr->describe(), "", "",
+                                  + "> ...) of undefined type, " + describeType(expr->typeexpr), "", "",
                                 expr->at, CompilationError::typeinfo_undefined);
                         }
                     } else {
                         error("typeinfo(offsetof<" + expr->subtrait
-                              + "> ...) is only defined for structures, " + expr->typeexpr->describe(), "", "",
+                              + "> ...) is only defined for structures, " + describeType(expr->typeexpr), "", "",
                             expr->at, CompilationError::typeinfo_undefined);
+                    }
+                } else if ( expr->trait=="builtin_function_exists" ) {
+                    if ( !expr->subexpr ) {
+                        error("builtin_function_exists requires subexpression", "", "",
+                            expr->at,CompilationError::typeinfo_undefined);
+                    } else {
+                        if ( expr->subexpr->rtti_isAddr() ) {
+                            auto eaddr = static_pointer_cast<ExprAddr>(expr->subexpr);
+                            if ( !eaddr->func ) {
+                                reportAstChanged();
+                                return make_smart<ExprConstBool>(false);
+                            } else if ( !eaddr->func->builtIn ) {
+                                error("builtin_function_exists of non-builtin function @@" + describeFunction(eaddr->func), "", "",
+                                    expr->at,CompilationError::typeinfo_undefined);
+                            } else {
+                                reportAstChanged();
+                                return make_smart<ExprConstBool>(true);
+                            }
+                        } else {
+                            error("unsupported mangled name subexpression ", expr->subexpr->__rtti, "",
+                                expr->at,CompilationError::typeinfo_undefined);
+                        }
+                    }
+                } else if ( expr->trait=="builtin_annotation_exists" ) {
+                    if ( expr->typeexpr->isAlias() ) {
+                        reportAstChanged();
+                        return make_smart<ExprConstBool>(false);
+                    } else if ( !expr->typeexpr->isHandle() ) {
+                        error("builtin_function_exists requires annotation type", "", "",
+                            expr->at,CompilationError::typeinfo_undefined);
+                    } else {
+                        reportAstChanged();
+                        return make_smart<ExprConstBool>(true);
                     }
                 } else {
                     auto mtis = program->findTypeInfoMacro(expr->trait);
@@ -2791,7 +2909,7 @@ namespace das {
                         error("typeinfo(" + expr->trait + " ...) too many macros match the trait", "", "",
                             expr->at, CompilationError::typeinfo_undefined);
                     } else if ( mtis.empty() ) {
-                        error("typeinfo(" + expr->trait + " ...) is undefined, " + expr->typeexpr->describe(), "", "",
+                        error("typeinfo(" + expr->trait + " ...) is undefined, " + describeType(expr->typeexpr), "", "",
                             expr->at, CompilationError::typeinfo_undefined);
                     } else {
                         expr->macro = mtis.back().get();
@@ -2857,13 +2975,13 @@ namespace das {
             // infer
             if ( !expr->subexpr->type->canDelete() ) {
                 expr->subexpr->type->canDelete();
-                error("can't delete " + expr->subexpr->type->describe(), "", "",
+                error("can't delete " + describeType(expr->subexpr->type), "", "",
                       expr->at, CompilationError::bad_delete);
             } else if ( !expr->subexpr->type->isRef() ) {
-                error("can only delete reference " + expr->subexpr->type->describe(), "", "",
+                error("can only delete reference " + describeType(expr->subexpr->type), "", "",
                       expr->at, CompilationError::bad_delete);
             } else if ( expr->subexpr->type->isConst() ) {
-                error("can't delete constant expression " + expr->subexpr->type->describe(), "", "",
+                error("can't delete constant expression " + describeType(expr->subexpr->type), "", "",
                       expr->at, CompilationError::bad_delete);
             } else if ( expr->subexpr->type->isPointer() ) {
                 if ( !safeExpression(expr) ) {
@@ -2883,7 +3001,7 @@ namespace das {
                                 return Visitor::visit(expr);
                             }
                         } else if ( ptrf.size() > 1 ) {
-                            string candidates = program->describeCandidates(ptrf);
+                            string candidates = verbose ? program->describeCandidates(ptrf) : "";
                             error("too many finalizers", candidates, "",
                                 expr->at, CompilationError::function_already_declared);
                             return Visitor::visit(expr);
@@ -3044,7 +3162,7 @@ namespace das {
             if ( castType->isSameType(*funT, RefMatters::yes, ConstMatters::yes, TemporaryMatters::yes) ) {
                 return funT;
             } else {
-                error("incompatible cast, can't cast " + funT->describe() + " to " + castType->describe(),  "", "",
+                error("incompatible cast, can't cast " + describeType(funT) + " to " + describeType(castType),  "", "",
                     at, CompilationError::invalid_cast);
                 return nullptr;
             }
@@ -3062,13 +3180,13 @@ namespace das {
                     expr->castType->sanitize();
                     reportAstChanged();
                 } else {
-                    error("undefined cast type " + expr->castType->describe(),  "", "",
+                    error("undefined cast type " + describeType(expr->castType),  "", "",
                         expr->at, CompilationError::type_not_found);
                     return Visitor::visit(expr);
                 }
             }
             if ( expr->castType->isAuto() ) {
-                error("casting to undefined type " + expr->castType->describe(),  "", "",
+                error("casting to undefined type " + describeType(expr->castType),  "", "",
                     expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
@@ -3093,7 +3211,7 @@ namespace das {
             if ( expr->type ) {
                 verifyType(expr->type);
             } else {
-                error("can't cast " + expr->subexpr->type->describe() + " to " + expr->castType->describe(), "", "",
+                error("can't cast " + describeType(expr->subexpr->type) + " to " + describeType(expr->castType), "", "",
                       expr->at, CompilationError::type_not_found);
                 return Visitor::visit(expr);
             }
@@ -3115,11 +3233,11 @@ namespace das {
             } else if ( expr->subexpr->type->baseType==Type::tHandle ) {
                 const auto & subt = expr->subexpr->type;
                 if ( !subt->dim.empty() ) {
-                    error("can't new [] of handled type, " + subt->describe(),  "", "",
+                    error("can't new [] of handled type, " + describeType(subt),  "", "",
                         expr->at, CompilationError::invalid_new_type);
                 }
                 if ( !subt->annotation->canNew() ) {
-                    error("can't new this handled type at all, " + subt->describe(),  "", "",
+                    error("can't new this handled type at all, " + describeType(subt),  "", "",
                         expr->at, CompilationError::invalid_new_type);
                 }
             }
@@ -3163,7 +3281,7 @@ namespace das {
                     expr->typeexpr->sanitize();
                     reportAstChanged();
                 } else {
-                    error("undefined new expression type " + expr->typeexpr->describe(), "", "",
+                    error("undefined new expression type " + describeType(expr->typeexpr), "", "",
                           expr->at, CompilationError::type_not_found);
                     return Visitor::visit(expr);
                 }
@@ -3175,7 +3293,7 @@ namespace das {
                     expr->at, CompilationError::invalid_new_type);
             } else if ( expr->typeexpr->baseType==Type::tStructure ) {
                 if ( !expr->initializer && expr->typeexpr->structType->isClass ) {
-                    error("new of class requires () syntax; " + expr->typeexpr->describe(), "", "",
+                    error("new of class requires () syntax; " + describeType(expr->typeexpr), "", "",
                         expr->at, CompilationError::invalid_new_type);
                 }
                 expr->type = make_smart<TypeDecl>(Type::tPointer);
@@ -3191,7 +3309,7 @@ namespace das {
                     expr->type->dim = expr->typeexpr->dim;
                     expr->type->smartPtr = expr->typeexpr->annotation->isSmart();
                 } else {
-                    error("can't new this type " + expr->typeexpr->describe(), "", "",
+                    error("can't new this type " + describeType(expr->typeexpr), "", "",
                           expr->at, CompilationError::invalid_new_type);
                 }
             } else if ( expr->typeexpr->baseType==Type::tTuple ) {
@@ -3207,11 +3325,11 @@ namespace das {
                 expr->type->dim = expr->typeexpr->dim;
                 expr->name = expr->typeexpr->getMangledName();
             } else {
-                error("can only new tuples, variants, structures or handled types, not " + expr->typeexpr->describe(), "", "",
+                error("can only new tuples, variants, structures or handled types, not " + describeType(expr->typeexpr), "", "",
                       expr->at, CompilationError::invalid_new_type);
             }
             if ( expr->initializer && expr->name.empty() ) {
-                error("only native structures can have initializers, not " + expr->typeexpr->describe(), "", "",
+                error("only native structures can have initializers, not " + describeType(expr->typeexpr), "", "",
                       expr->at, CompilationError::invalid_new_type);
             }
             if ( expr->type && expr->initializer && !expr->name.empty() ) {
@@ -3220,13 +3338,13 @@ namespace das {
                 swap ( resultType, expr->type );
                 if ( expr->func ) {
                     if ( !expr->type->firstType->isSameType(*resultType, RefMatters::yes, ConstMatters::yes, TemporaryMatters::yes) ) {
-                        error("initializer returns " +resultType->describe() + " vs "
-                            +  expr->type->firstType->describe(), "", "",
+                        error("initializer returns " + describeType(resultType) + " vs "
+                            +  describeType(expr->type->firstType), "", "",
                               expr->at, CompilationError::invalid_new_type);
                     }
                 }
                 else {
-                    error(expr->type->firstType->describe() + " does not have default initializer", "", "",
+                    error(describeType(expr->type->firstType) + " does not have default initializer", "", "",
                         expr->at, CompilationError::invalid_new_type);
                 }
             }
@@ -3243,7 +3361,7 @@ namespace das {
             if ( seT->isGoodTableType() ) {
                 if ( !seT->firstType->isSameType(*ixT,RefMatters::no, ConstMatters::no, TemporaryMatters::no) ) {
                     error("table index type mismatch, "
-                        +seT->firstType->describe() + " vs " + ixT->describe(),  "", "",
+                        + describeType(seT->firstType) + " vs " + describeType(ixT),  "", "",
                         expr->index->at, CompilationError::invalid_index_type);
                     return Visitor::visit(expr);
                 }
@@ -3257,7 +3375,7 @@ namespace das {
                 expr->type->constant |= seT->constant;
             } else if ( seT->isHandle() ) {
                 if ( !seT->annotation->isIndexable(ixT) ) {
-                    error("handle " + seT->annotation->name + " does not support index type " + ixT->describe(),  "", "",
+                    error("handle " + seT->annotation->name + " does not support index type " + describeType(ixT),  "", "",
                         expr->index->at, CompilationError::invalid_index_type);
                     return Visitor::visit(expr);
                 }
@@ -3269,7 +3387,7 @@ namespace das {
                         expr->at, CompilationError::unsafe);
                 }
                 if ( !ixT->isIndex() ) {
-                    error("index must be int or uint, not " + ixT->describe(),  "", "",
+                    error("index must be int or uint, not " + describeType(ixT),  "", "",
                         expr->index->at, CompilationError::invalid_index_type);
                     return Visitor::visit(expr);
                 } else if ( !seT->firstType || seT->firstType->getSizeOf()==0 ){
@@ -3285,7 +3403,7 @@ namespace das {
             } else {
                 if ( !ixT->isIndex() ) {
                     expr->type.reset();
-                    error("index must be int or uint, not " + ixT->describe(),  "", "",
+                    error("index must be int or uint, not " + describeType(ixT),  "", "",
                         expr->index->at, CompilationError::invalid_index_type);
                     return Visitor::visit(expr);
                 } else if ( seT->isVectorType() ) {
@@ -3297,11 +3415,11 @@ namespace das {
                     expr->type->ref = true;
                     expr->type->constant |= seT->constant;
                 } else if ( !seT->dim.size() ) {
-                    error("type can't be indexed " + seT->describe(),  "", "",
+                    error("type can't be indexed " + describeType(seT),  "", "",
                         expr->subexpr->at, CompilationError::cant_index);
                     return Visitor::visit(expr);
                 } else if ( !seT->isAutoArrayResolved() ) {
-                    error("type dimensions are not resolved yet " + seT->describe(),  "", "",
+                    error("type dimensions are not resolved yet " + describeType(seT),  "", "",
                         expr->subexpr->at, CompilationError::cant_index);
                     return Visitor::visit(expr);
                 } else {
@@ -3314,7 +3432,7 @@ namespace das {
                     expr->type->constant |= seT->constant;
                 }
             }
-            propagateTempType(expr->subexpr->type, expr->type);
+            propagateTempType(expr->subexpr->type, expr->type); // foo#[a] = a#
             return Visitor::visit(expr);
         }
     // ExprSafeAt
@@ -3340,7 +3458,7 @@ namespace das {
                     }
                     if ( !seT->firstType->isSameType(*ixT,RefMatters::no, ConstMatters::no, TemporaryMatters::no) ) {
                         error("table safe-index type mismatch, "
-                            + seT->firstType->describe() + " vs " + ixT->describe(),  "", "",
+                            + describeType(seT->firstType) + " vs " + describeType(ixT),  "", "",
                             expr->index->at, CompilationError::invalid_index_type);
                         return Visitor::visit(expr);
                     }
@@ -3350,7 +3468,7 @@ namespace das {
                 } else if (seT->isHandle()) {
                     // TODO: support handle safe index
                     // if (!seT->annotation->isIndexable(ixT)) {
-                        error("handle " + seT->annotation->name + " does not support safe index type " + ixT->describe(), "", "",
+                        error("handle " + seT->annotation->name + " does not support safe index type " + describeType(ixT), "", "",
                             expr->index->at, CompilationError::invalid_index_type);
                         return Visitor::visit(expr);
                     // }
@@ -3364,7 +3482,7 @@ namespace das {
                 } else {
                     if (!ixT->isIndex()) {
                         expr->type.reset();
-                        error("index must be int or uint, not " + ixT->describe(), "", "",
+                        error("index must be int or uint, not " + describeType(ixT), "", "",
                             expr->index->at, CompilationError::invalid_index_type);
                         return Visitor::visit(expr);
                     } else if (seT->isVectorType()) {
@@ -3381,7 +3499,7 @@ namespace das {
                         expr->type->firstType->constant |= seT->constant;
                     } else if ( seT->dim.size() ) {
                         if ( !seT->isAutoArrayResolved() ) {
-                            error("type dimensions are not resolved yet " + seT->describe(), "", "",
+                            error("type dimensions are not resolved yet " + describeType(seT), "", "",
                                 expr->subexpr->at, CompilationError::cant_index);
                             return Visitor::visit(expr);
                         } else {
@@ -3398,7 +3516,7 @@ namespace das {
                         expr->type->firstType = make_smart<TypeDecl>(seT->getVectorBaseType());
                         expr->type->firstType->constant = seT->constant;
                     } else {
-                        error("type can't be safe-indexed " + seT->describe(), "", "",
+                        error("type can't be safe-indexed " + describeType(seT), "", "",
                             expr->subexpr->at, CompilationError::cant_index);
                         return Visitor::visit(expr);
                     }
@@ -3420,7 +3538,7 @@ namespace das {
                 const auto & seT = expr->subexpr->type;
                 if ( !seT->firstType->isSameType(*ixT,RefMatters::no, ConstMatters::no, TemporaryMatters::no) ) {
                     error("table safe-index type mismatch, "
-                        + seT->firstType->describe() + " vs " + ixT->describe(),  "", "",
+                        + describeType(seT->firstType) + " vs " + describeType(ixT),  "", "",
                         expr->index->at, CompilationError::invalid_index_type);
                     return Visitor::visit(expr);
                 }
@@ -3434,7 +3552,7 @@ namespace das {
                 }
                 const auto & seT = expr->subexpr->type;
                 if ( !seT->isAutoArrayResolved() ) {
-                    error("type dimensions are not resolved yet " + seT->describe(), "", "",
+                    error("type dimensions are not resolved yet " + describeType(seT), "", "",
                         expr->subexpr->at, CompilationError::cant_index);
                 }
                 expr->type = make_smart<TypeDecl>(Type::tPointer);
@@ -3450,16 +3568,16 @@ namespace das {
                 expr->type->firstType = make_smart<TypeDecl>(seT->getVectorBaseType());
                 expr->type->firstType->constant = seT->constant;
             } else {
-                error("type can't be safe-indexed " + expr->subexpr->type->describe(), "", "",
+                error("type can't be safe-indexed " + describeType(expr->subexpr->type), "", "",
                     expr->subexpr->at, CompilationError::cant_index);
                 return Visitor::visit(expr);
             }
-            propagateTempType(expr->subexpr->type, expr->type);
+            propagateTempType(expr->subexpr->type, expr->type); // foo#?[a] = a?#
             return Visitor::visit(expr);
         }
     // ExprBlock
         void setBlockCopyMoveFlags ( ExprBlock * block ) {
-            if ( block->returnType->isRefType() ) {
+            if ( block->returnType->isRefType() && !block->returnType->ref ) {
                 if ( block->returnType->canCopy() ) {
                     block->copyOnReturn = true;
                     block->moveOnReturn = false;
@@ -3467,7 +3585,7 @@ namespace das {
                     block->copyOnReturn = false;
                     block->moveOnReturn = true;
                 } else {
-                    error("this type can't be returned at all " + block->returnType->describe(), "", "",
+                    error("this type can't be returned at all " + describeType(block->returnType), "", "",
                           block->at, CompilationError::invalid_return_type);
                 }
             } else {
@@ -3500,7 +3618,7 @@ namespace das {
                     for ( auto & fna : func->arguments ) {
                         if ( fna->name==var->name ) {
                             error("block argument " + var->name +" is shadowed by function argument "
-                                + fna->name + " : " + fna->type->describe() + " at line " + to_string(fna->at.line), "", "",
+                                + fna->name + " : " + describeType(fna->type) + " at line " + to_string(fna->at.line), "", "",
                                     var->at, CompilationError::variable_not_found);
                         }
                     }
@@ -3510,7 +3628,7 @@ namespace das {
                     for ( auto & bna : blk->arguments ) {
                         if ( bna->name==var->name ) {
                             error("block argument " + var->name +" is shadowed by another block argument "
-                                + bna->name + " : " + bna->type->describe() + " at line " + to_string(bna->at.line), "", "",
+                                + bna->name + " : " + describeType(bna->type) + " at line " + to_string(bna->at.line), "", "",
                                     var->at, CompilationError::variable_not_found);
                         }
                     }
@@ -3518,7 +3636,7 @@ namespace das {
                 for ( auto & lv : local ) {
                     if ( lv->name==var->name ) {
                         error("block argument " + var->name +" is shadowed by local variable "
-                            + lv->name + " : " + lv->type->describe() + " at line " + to_string(lv->at.line), "", "",
+                            + lv->name + " : " + describeType(lv->type) + " at line " + to_string(lv->at.line), "", "",
                                 var->at, CompilationError::variable_not_found);
                         break;
                     }
@@ -3534,7 +3652,7 @@ namespace das {
                     var->type = aT;
                     reportAstChanged();
                 } else {
-                    error("undefined block argument type " + var->type->describe(),  "", "",
+                    error("undefined block argument type " + describeType(var->type),  "", "",
                         var->at, CompilationError::type_not_found);
                 }
             }
@@ -3553,7 +3671,7 @@ namespace das {
                 auto argT = TypeDecl::inferGenericType(arg->type, arg->init->type);
                 if ( !argT ) {
                     error("block argument initialization type can't be infered, "
-                          + arg->type->describe() + " = " + arg->init->type->describe(), "", "",
+                          + describeType(arg->type) + " = " + describeType(arg->init->type), "", "",
                           arg->at, CompilationError::cant_infer_mismatching_restrictions );
                 } else {
                     TypeDecl::applyAutoContracts(argT, arg->type);
@@ -3566,12 +3684,12 @@ namespace das {
             if (!arg->type->isAuto()) {
                 if (!arg->init->type || !arg->type->isSameType(*arg->init->type, RefMatters::no, ConstMatters::no, TemporaryMatters::no)) {
                     error("block argument default value type mismatch "
-                        + arg->type->describe() + " vs " + (arg->init->type ? arg->init->type->describe() : "???"),  "", "",
+                        + describeType(arg->type) + " vs " + (arg->init->type ? describeType(arg->init->type) : "???"),  "", "",
                         arg->init->at, CompilationError::invalid_argument_type);
                 }
                 if (arg->init->type && arg->type->ref && !arg->init->type->ref) {
-                    error("block argument default value type mismatch " + arg->type->describe()
-                        + " vs " + arg->init->type->describe() + ", reference matters",   "", "",
+                    error("block argument default value type mismatch " + describeType(arg->type)
+                        + " vs " + describeType(arg->init->type) + ", reference matters",   "", "",
                         arg->init->at, CompilationError::invalid_argument_type);
                 }
             }
@@ -3674,7 +3792,7 @@ namespace das {
             expr->type = make_smart<TypeDecl>(*valT->argTypes[expr->fieldIndex]);
             expr->type->ref = true;
             expr->type->constant |= valT->constant;
-            propagateTempType(expr->value->type, expr->type);
+            propagateTempType(expr->value->type, expr->type); // a# as foo = foo#
             return Visitor::visit(expr);
         }
     // ExprSafeAsVariant
@@ -3726,7 +3844,7 @@ namespace das {
                 expr->type->firstType = fieldType;
             }
             expr->type->constant |= valT->constant | expr->value->type->constant;
-            propagateTempType(expr->value->type, expr->type);
+            propagateTempType(expr->value->type, expr->type); // a# ?as foo = foo?#
             return Visitor::visit(expr);
         }
     // ExprIsVariant
@@ -3787,7 +3905,7 @@ namespace das {
                 valT = expr->value->type;
                 int index = expr->bitFieldIndex();
                 if ( index==-1 || index>=int(valT->argNames.size()) ) {
-                    error("can't get bit field " + expr->name + " in " + valT->describe(), "", "",
+                    error("can't get bit field " + expr->name + " in " + describeType(valT), "", "",
                         expr->at, CompilationError::cant_get_field);
                     return Visitor::visit(expr);
                 }
@@ -3849,7 +3967,7 @@ namespace das {
                 }
                 expr->fieldIndex = index;
             } else {
-                error("can't get field " + expr->name + " of " + expr->value->type->describe(), "", "",
+                error("can't get field " + expr->name + " of " + describeType(expr->value->type), "", "",
                       expr->at, CompilationError::cant_get_field);
                 return Visitor::visit(expr);
             }
@@ -3874,13 +3992,13 @@ namespace das {
                     expr->type->constant |= tupleT->constant;
                 }
             } else if ( !expr->type ) {
-                error("field " + expr->name + " not found in " + expr->value->type->describe(), "", "",
+                error("field " + expr->name + " not found in " + describeType(expr->value->type), "", "",
                       expr->at, CompilationError::cant_get_field);
                 return Visitor::visit(expr);
             } else {
                 expr->type->constant |= valT->constant;
             }
-            propagateTempType(expr->value->type, expr->type);
+            propagateTempType(expr->value->type, expr->type);   // a#.foo = foo#
             return Visitor::visit(expr);
         }
     // ExprSafeField
@@ -3889,7 +4007,7 @@ namespace das {
             // infer
             auto valT = expr->value->type;
             if ( !valT->isPointer() || !valT->firstType ) {
-                error("can only safe dereference a pointer to a tupe, a structure or a handle " + valT->describe(), "", "",
+                error("can only safe dereference a pointer to a tupe, a structure or a handle " + describeType(valT), "", "",
                       expr->at, CompilationError::cant_get_field);
                 return Visitor::visit(expr);
             }
@@ -3934,7 +4052,7 @@ namespace das {
                 expr->fieldIndex = index;
                 expr->type = make_smart<TypeDecl>(*valT->firstType->argTypes[expr->fieldIndex]);
             } else {
-                error("can only safe dereference a pointer to a tuple, a structure or a handle " + valT->describe(), "", "",
+                error("can only safe dereference a pointer to a tuple, a structure or a handle " + describeType(valT), "", "",
                       expr->at, CompilationError::cant_get_field);
                 return Visitor::visit(expr);
             }
@@ -3945,7 +4063,7 @@ namespace das {
                 expr->type->firstType = fieldType;
             }
             expr->type->constant |= valT->constant;
-            propagateTempType(expr->value->type, expr->type);
+            propagateTempType(expr->value->type, expr->type); // a#?.foo = foo?#
             return Visitor::visit(expr);
         }
     // ExprVar
@@ -4044,7 +4162,11 @@ namespace das {
             } else {
                 TextWriter errs;
                 for ( auto & var : vars ) {
-                    errs << "\t" << var->module->name << "::" << var->name << " : " << var->type->describe() << "\n";
+                    errs << "\t" << var->module->name << "::" << var->name << " : " << describeType(var->type);
+                    if ( var->at.line ) {
+                        errs << " at " << var->at.describe();
+                    }
+                    errs << "\n";
                 }
                 error("too many matching variables " + expr->name, "candidates are:\n" + errs.str(), "",
                     expr->at, CompilationError::variable_not_found);
@@ -4058,7 +4180,7 @@ namespace das {
             if ( expr->subexpr->type->isPointer() ) {
                 if ( !expr->subexpr->type->firstType ) {
                     error("operations on void pointers are prohibited; " +
-                        expr->subexpr->type->describe(), "", "",
+                        describeType(expr->subexpr->type), "", "",
                         expr->at, CompilationError::invalid_type);
                 } else {
                     string pop;
@@ -4080,12 +4202,13 @@ namespace das {
             // infer
             vector<TypeDeclPtr> types = { expr->subexpr->type };
             auto functions = findMatchingFunctions(expr->op, types);
+            applyLSP(types, functions);
             if ( functions.size()==0 ) {
                 reportMissing(expr, types, "no matching operator ", true, CompilationError::operator_not_found);
             } else if ( functions.size()>1 ) {
-                string candidates = program->describeCandidates(functions);
+                string candidates = verbose ? program->describeCandidates(functions) : "";
                 error("too many matching operators '" + expr->op
-                      + "' with argument " + expr->subexpr->type->describe(), "", "",
+                      + "' with argument " + describeType(expr->subexpr->type), candidates, "",
                     expr->at, CompilationError::operator_not_found);
             } else {
                 expr->func = functions[0].get();
@@ -4149,7 +4272,7 @@ namespace das {
             if ( expr->left->type->isPointer() && expr->right->type->isSimpleType(Type::tInt) ) {
                 if ( !expr->left->type->firstType ) {
                     error("operations on void pointers are prohibited; " +
-                        expr->left->type->describe(), "", "",
+                        describeType(expr->left->type), "", "",
                         expr->at, CompilationError::invalid_type);
                 } else {
                     string pop;
@@ -4175,13 +4298,13 @@ namespace das {
             if ( expr->left->type->isPointer() && expr->right->type->isPointer() ) {
                 if ( !isSameSmartPtrType(expr->left->type,expr->right->type) ) {
                     error("operations on incompatible pointers are prohibited; " +
-                        expr->left->type->describe() + " vs " + expr->right->type->describe(), "", "",
+                        describeType(expr->left->type) + " vs " + describeType(expr->right->type), "", "",
                         expr->at, CompilationError::invalid_type);
                 }
                 if ( expr->op=="-" ) {
                     if ( !expr->left->type->firstType ) {
                         error("operations on void pointers are prohibited; " +
-                            expr->left->type->describe(), "", "",
+                            describeType(expr->left->type), "", "",
                             expr->at, CompilationError::invalid_type);
                     } else {
                         reportAstChanged();
@@ -4200,6 +4323,7 @@ namespace das {
                         expr->at, CompilationError::invalid_type);
             vector<TypeDeclPtr> types = { expr->left->type, expr->right->type };
             auto functions = findMatchingFunctions("_::" + expr->op, types);    // NOTE: operators always in the context of the callee
+            applyLSP(types, functions);
             if (functions.size() != 1) {
                 if (expr->left->type->isNumeric() && expr->right->type->isNumeric()) {
                     if ( isAssignmentOperator(expr->op) ) {
@@ -4210,29 +4334,45 @@ namespace das {
                             error("numeric operator " + expr->op + " left side can't be constant.", "", "",
                                 expr->at, CompilationError::operator_not_found);
                         } else  {
-                            TextWriter tw;
-                            tw << "\t" << *expr->left << " " << expr->op << " " << das_to_string(expr->left->type->baseType) << " (" << *expr->right << ")\n";
-                            error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. " +
-                                das_to_string(expr->left->type->baseType) + " " + expr->op + " " + das_to_string(expr->right->type->baseType)
-                                + " is not defined", "", "try the following\n" + tw.str(),
-                                expr->at, CompilationError::operator_not_found);
+                            if ( verbose ) {
+                                TextWriter tw;
+                                tw << "\t" << *expr->left << " " << expr->op << " " << das_to_string(expr->left->type->baseType) << " (" << *expr->right << ")\n";
+                                error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. " +
+                                    das_to_string(expr->left->type->baseType) + " " + expr->op + " " + das_to_string(expr->right->type->baseType)
+                                    + " is not defined", "", "try the following\n" + tw.str(),
+                                    expr->at, CompilationError::operator_not_found);
+                            } else {
+                                error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. ",  "", "",
+                                    expr->at, CompilationError::operator_not_found);
+                            }
                         }
                     } else {
-                        TextWriter tw;
-                        tw << "\t" << *expr->left << " " << expr->op << " " << das_to_string(expr->left->type->baseType) << " (" << *expr->right << ")\n";
-                        tw << "\t" << das_to_string(expr->right->type->baseType) << "(" << *expr->left << ") " << expr->op << " " << *expr->right << "\n";
-                        error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. " +
-                            das_to_string(expr->left->type->baseType) + " " + expr->op + " " + das_to_string(expr->right->type->baseType)
-                            + " is not defined", "", "try one of the following\n" + tw.str(),
-                            expr->at, CompilationError::operator_not_found);
+                        if ( verbose ) {
+                            TextWriter tw;
+                            tw << "\t" << *expr->left << " " << expr->op << " " << das_to_string(expr->left->type->baseType) << " (" << *expr->right << ")\n";
+                            tw << "\t" << das_to_string(expr->right->type->baseType) << "(" << *expr->left << ") " << expr->op << " " << *expr->right << "\n";
+                            error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. " +
+                                das_to_string(expr->left->type->baseType) + " " + expr->op + " " + das_to_string(expr->right->type->baseType)
+                                + " is not defined", "", "try one of the following\n" + tw.str(),
+                                expr->at, CompilationError::operator_not_found);
+                        } else {
+                            error("numeric operator " + expr->op + " type mismatch. both sides have to be of the same type. ", "" , "",
+                                expr->at, CompilationError::operator_not_found);
+
+                        }
                     }
                 } else if (functions.size() == 0) {
                     reportMissing(expr, types, "no matching operator ", true, CompilationError::operator_not_found);
                 } else if (functions.size() > 1) {
-                    string candidates = program->describeCandidates(functions);
-                    error("too many matching operators '" + expr->op
-                        + "' with arguments (" + expr->left->type->describe() + ", " + expr->right->type->describe()
-                        + ")", candidates, "", expr->at, CompilationError::operator_not_found);
+                    if ( verbose ) {
+                        string candidates = program->describeCandidates(functions);
+                        error("too many matching operators '" + expr->op
+                            + "' with arguments (" + describeType(expr->left->type) + ", " + describeType(expr->right->type)
+                            + ")", candidates, "", expr->at, CompilationError::operator_not_found);
+                    } else {
+                        error("too many matching operators '" + expr->op + "'", "", "",
+                            expr->at, CompilationError::operator_not_found);
+                    }
                 }
             }
             else {
@@ -4310,7 +4450,11 @@ namespace das {
             }
         }
         string moveErrorInfo(ExprMove * expr) const {
-            return ", " + expr->left->type->describe() + " <- " + expr->right->type->describe();
+            if ( verbose ) {
+                return ", " + describeType(expr->left->type) + " <- " + describeType(expr->right->type);
+            } else {
+                return "";
+            }
         }
         virtual ExpressionPtr visit ( ExprMove * expr ) override {
             if ( !expr->left->type || !expr->right->type ) return Visitor::visit(expr);
@@ -4349,7 +4493,11 @@ namespace das {
         }
     // ExprCopy
         string copyErrorInfo(ExprCopy * expr) const {
-            return ", " + expr->left->type->describe() + " = " + expr->right->type->describe();
+            if ( verbose ) {
+                return ", " + describeType(expr->left->type) + " = " + describeType(expr->right->type);
+            } else {
+                return "";
+            }
         }
         virtual ExpressionPtr visit ( ExprCopy * expr ) override {
             if ( !expr->left->type || !expr->right->type ) return Visitor::visit(expr);
@@ -4396,7 +4544,7 @@ namespace das {
             }
             // infer
             if ( !isSameSmartPtrType(expr->left->type,expr->right->type,true) ) {
-                error("can only clone the same type " + expr->left->type->describe() + " vs " + expr->right->type->describe(), "", "",
+                error("can only clone the same type " + describeType(expr->left->type) + " vs " + describeType(expr->right->type), "", "",
                       expr->at, CompilationError::operator_not_found);
             } else if ( !expr->left->type->isRef() ) {
                 error("can only clone to a reference", "", "",
@@ -4405,7 +4553,7 @@ namespace das {
                 error("can't write to a constant value", "", "",
                     expr->at, CompilationError::cant_write_to_const);
             } else if ( !expr->left->type->canClone() ) {
-                error("type " + expr->left->type->describe() + " can't be cloned from " + expr->right->type->describe(), "", "",
+                error("type " + describeType(expr->left->type) + " can't be cloned from " + describeType(expr->right->type), "", "",
                     expr->at, CompilationError::cant_copy);
             } else {
                 auto cloneType = expr->left->type;
@@ -4499,7 +4647,7 @@ namespace das {
                     cloneFn->arguments.push_back(expr->right->clone());
                     return ExpressionPtr(cloneFn);
                 } else {
-                    error("this type can't be cloned " + cloneType->describe(), "", "",
+                    error("this type can't be cloned " + describeType(cloneType), "", "",
                         expr->at, CompilationError::cant_copy);
                 }
             }
@@ -4521,7 +4669,7 @@ namespace das {
                     auto resT = TypeDecl::inferGenericType(resType, expr->subexpr->type);
                     if ( !resT ) {
                         error("type can't be infered, "
-                              + resType->describe() + ", returns " + expr->subexpr->type->describe(),"", "",
+                              + describeType(resType) + ", returns " + describeType(expr->subexpr->type),"", "",
                               expr->at, CompilationError::cant_infer_mismatching_restrictions );
                     } else {
                         resT->ref = false;
@@ -4548,24 +4696,24 @@ namespace das {
                 } else {
                     if ( !canCopyOrMoveType(resType,expr->subexpr->type,TemporaryMatters::yes) ) {
                         error("incompatible return type, expecting "
-                              + resType->describe() + ", passing " + expr->subexpr->type->describe(), "", "",
+                              + describeType(resType) + ", passing " + describeType(expr->subexpr->type), "", "",
                               expr->at, CompilationError::invalid_return_type);
                     }
                     if ( resType->ref && !expr->subexpr->type->ref ) {
                         error("incompatible return type, reference matters. expecting "
-                              + resType->describe() + ", passing " + expr->subexpr->type->describe(), "", "",
+                              + describeType(resType) + ", passing " + describeType(expr->subexpr->type), "", "",
                               expr->at, CompilationError::invalid_return_type);
                     }
                     if ( resType->isRef() && !resType->isConst() && expr->subexpr->type->isConst() ) {
                         error("incompatible return type, constant matters. expecting "
-                              + resType->describe() + ", passing " + expr->subexpr->type->describe(), "", "",
+                              + describeType(resType) + ", passing " + describeType(expr->subexpr->type), "", "",
                               expr->at, CompilationError::invalid_return_type);
                     }
                 }
             }
             if ( resType->isRefType() ) {
                 if ( !resType->canCopy() && !resType->canMove() ) {
-                    error("this type can't be returned at all " + resType->describe(), "", "",
+                    error("this type can't be returned at all " + describeType(resType), "", "",
                           expr->at, CompilationError::invalid_return_type);
                 }
             }
@@ -4598,7 +4746,7 @@ namespace das {
                     setBlockCopyMoveFlags(block);
                 }
                 if ( block->moveOnReturn && !expr->moveSemantics ) {
-                    error("this type can't be copied; " + block->type->describe(),"","use return <- instead",
+                    error("this type can't be copied; " + describeType(block->type),"","use return <- instead",
                           expr->at, CompilationError::invalid_return_semantics );
                 }
                 if ( block->returnType && block->returnType->ref && !safeExpression(expr) ) {
@@ -4615,14 +4763,16 @@ namespace das {
                 if ( expr->subexpr ) {
                     if ( !expr->subexpr->type ) return Visitor::visit(expr);
                     if ( !func->result->ref ) {
-                        expr->subexpr = Expression::autoDereference(expr->subexpr);
+                        if ( !expr->moveSemantics ) {
+                            expr->subexpr = Expression::autoDereference(expr->subexpr);
+                        }
                     } else {
                         expr->returnReference = true;
                     }
                 }
                 inferReturnType(func->result, expr);
                 if ( func->moveOnReturn && !expr->moveSemantics ) {
-                    error("this type can't be copied; " + func->result->describe(),"","use return <- instead",
+                    error("this type can't be copied; " + describeType(func->result),"","use return <- instead",
                           expr->at, CompilationError::invalid_return_semantics );
                 }
                 if ( func->result->ref && !safeExpression(expr) ) {
@@ -4796,14 +4946,14 @@ namespace das {
             if ( auto wT = expr->with->type ) {
                 StructurePtr pSt;
                 if ( wT->dim.size() ) {
-                    error("with array in undefined, " + wT->describe(), "", "",
+                    error("with array in undefined, " + describeType(wT), "", "",
                         expr->at, CompilationError::invalid_with_type );
                 } else if ( wT->isStructure() ) {
                     pSt = wT->structType;
                 } else if ( wT->isPointer() && wT->firstType && wT->firstType->isStructure() ) {
                     pSt = wT->firstType->structType;
                 } else {
-                    error("unexpected with type " + wT->describe(), "", "",
+                    error("unexpected with type " + describeType(wT), "", "",
                         expr->at, CompilationError::invalid_with_type );
                 }
                 if ( pSt ) {
@@ -4911,7 +5061,7 @@ namespace das {
                 } else if ( src->type->isHandle() && src->type->annotation->isIterable() ) {
                     pVar->type = make_smart<TypeDecl>(*src->type->annotation->makeIteratorType(src));
                 } else {
-                    error("unsupported iteration type for the loop variable " + pVar->name + ", iterating over " + src->type->describe(), "", "",
+                    error("unsupported iteration type for the loop variable " + pVar->name + ", iterating over " + describeType(src->type), "", "",
                         expr->at, CompilationError::invalid_iteration_source);
                     return;
                 }
@@ -4980,7 +5130,7 @@ namespace das {
                     var->type->sanitize();
                     reportAstChanged();
                 } else {
-                    error("undefined let type " + var->type->describe(), "", "",
+                    error("undefined let type " + describeType(var->type), "", "",
                         var->at, CompilationError::type_not_found);
                 }
             }
@@ -4992,7 +5142,7 @@ namespace das {
                 for ( auto & fna : func->arguments ) {
                     if ( fna->name==var->name ) {
                         error("local variable " + var->name +" is shadowed by function argument "
-                            + fna->name + " : " + fna->type->describe() + " at line " + to_string(fna->at.line), "", "",
+                            + fna->name + " : " + describeType(fna->type) + " at line " + to_string(fna->at.line), "", "",
                                 var->at, CompilationError::variable_not_found);
                     }
                 }
@@ -5001,7 +5151,7 @@ namespace das {
                 for ( auto & bna : blk->arguments ) {
                     if ( bna->name==var->name ) {
                         error("local variable " + var->name +" is shadowed by block argument "
-                            + bna->name + " : " + bna->type->describe() + " at line " + to_string(bna->at.line), "", "",
+                            + bna->name + " : " + describeType(bna->type) + " at line " + to_string(bna->at.line), "", "",
                                 var->at, CompilationError::variable_not_found);
                     }
                 }
@@ -5009,7 +5159,7 @@ namespace das {
             for ( auto & lv : local ) {
                 if ( lv->name==var->name ) {
                     error("local variable " + var->name +" is shadowed by another local variable "
-                          + lv->name + " : " + lv->type->describe() + " at line " + to_string(lv->at.line), "", "",
+                          + lv->name + " : " + describeType(lv->type) + " at line " + to_string(lv->at.line), "", "",
                           var->at, CompilationError::variable_not_found);
                     break;
                 }
@@ -5036,14 +5186,19 @@ namespace das {
                 error("local variable can't be declared void", "", "",
                       var->at, CompilationError::invalid_variable_type);
             if ( !var->type->isLocal() && !var->type->ref )
-                error("can't have local variable of type " + var->type->describe(), "", "",
+                error("can't have local variable of type " + describeType(var->type), "", "",
                       var->at, CompilationError::invalid_variable_type);
             if ( var->type->hasClasses() && !safeExpression(expr) ) {
-                error("local class requires unsafe " + var->type->describe(), "", "",
+                error("local class requires unsafe " + describeType(var->type), "", "",
                       var->at, CompilationError::unsafe);
             }
             if ( !var->type->isAutoOrAlias() ){
-                if ( var->init && var->init->rtti_isCast() ) {
+                if ( !var->init && var->type->isLocal() ) { // we already report error for non-local
+                    if ( var->type->hasNonTrivialCtor() ) {
+                        error("local variable of type " + describeType(var->type) + " needs to be initialized", "", "",
+                            var->at, CompilationError::invalid_variable_type);
+                    }
+                } else if ( var->init && var->init->rtti_isCast() ) {
                     auto castExpr = static_pointer_cast<ExprCast>(var->init);
                     if ( castExpr->castType->isAuto() ) {
                         reportAstChanged();
@@ -5071,7 +5226,7 @@ namespace das {
                 auto varT = TypeDecl::inferGenericInitType(var->type, var->init->type);
                 if ( !varT || varT->isAlias() ) {
                     error("local variable " + var->name + " initialization type can't be infered, "
-                          + var->type->describe() + " = " + var->init->type->describe(), "", "",
+                          + describeType(var->type) + " = " + describeType(var->init->type), "", "",
                           var->at, CompilationError::cant_infer_mismatching_restrictions );
                 } else {
                     varT->ref = false;
@@ -5082,17 +5237,26 @@ namespace das {
                 }
             } else if ( !canCopyOrMoveType(var->type,var->init->type,TemporaryMatters::no) ) {
                 error("local variable " + var->name + " initialization type mismatch, "
-                      + var->type->describe() + " = " + var->init->type->describe(), "", "",
+                      + describeType(var->type) + " = " + describeType(var->init->type), "", "",
                     var->at, CompilationError::invalid_initialization_type);
             } else if ( var->type->ref && !var->init->type->isRef()) {
                 error("local variable " + var->name + " initialization type mismatch. reference can't be initialized via value, "
-                      + var->type->describe() + " = " + var->init->type->describe(), "", "",
+                      + describeType(var->type) + " = " + describeType(var->init->type), "", "",
                     var->at, CompilationError::invalid_initialization_type);
             } else if ( var->type->ref &&  !var->type->isConst() && var->init->type->isConst() ) {
                 error("local variable " + var->name + " initialization type mismatch. const matters, "
-                      + var->type->describe() + " = " + var->init->type->describe(), "", "",
+                      + describeType(var->type) + " = " + describeType(var->init->type), "", "",
                     var->at, CompilationError::invalid_initialization_type);
-            } else if ( !var->type->ref && !var->init->type->canCopy() && !var->init->type->canMove() ) {
+            } else if ( !var->type->ref && !var->init->type->canCopy() && !var->init->type->canMove()
+                        && var->type->hasNonTrivialCtor() && !var->isCtorInitialized() ) {
+                error("local variable " + var->name + " can only be initialized with type constructor", "", "",
+                    var->at, CompilationError::invalid_initialization_type);
+            } else if ( !var->type->ref && !var->init->type->canCopy() && !var->init->type->canMove()
+                        && var->type->hasNonTrivialCtor() && var->isCtorInitialized() && var->init_via_move ) {
+                error("local variable " + var->name + " can only be initialized with copy", "", "",
+                    var->at, CompilationError::invalid_initialization_type);
+            } else if ( !var->type->ref && !var->init->type->canCopy() && !var->init->type->canMove()
+                        && !var->type->hasNonTrivialCtor() ) {
                 error("local variable " + var->name + " can't be initialized at all", "", "",
                     var->at, CompilationError::invalid_initialization_type);
             } else if ( !var->type->ref && !var->init->type->canCopy()
@@ -5109,8 +5273,8 @@ namespace das {
                 if ( fnList.size() && verifyCloneFunc(fnList, expr->at) ) {
                     return promoteToCloneToMove(var);
                 } else {
-                    error("local variable " + var->name + " of type " + var->type->describe()
-                    + " can't be cloned from " + var->init->type->describe(),"", "",
+                    error("local variable " + var->name + " of type " + describeType(var->type)
+                    + " can't be cloned from " + describeType(var->init->type),"", "",
                       var->at, CompilationError::cant_copy);
                 }
             } else {
@@ -5236,7 +5400,7 @@ namespace das {
             auto can1 = findCandidates(expr->name, types);
             auto can2 = findGenericCandidates(expr->name, types);
             can1.insert(can1.end(), can2.begin(), can2.end());
-            reportFunctionNotFound(expr->name, msg + expr->describe(), expr->at, can1, types, true, true, reportDetails, cerror);
+            reportFunctionNotFound(expr->name, msg + (verbose ? expr->describe() : ""), expr->at, can1, types, true, true, reportDetails, cerror);
         }
         virtual void reportExcess ( ExprLooksLikeCall * expr, const vector<TypeDeclPtr>  & types,
                                    const string & msg, vector<FunctionPtr> can1, vector<FunctionPtr> can2,
@@ -5248,6 +5412,13 @@ namespace das {
             if ( expr->argumentsFailedToInfer ) return Visitor::visit(expr);
             auto functions = findMatchingFunctions(expr->name, expr->arguments, true);
             auto generics = findMatchingGenerics(expr->name, expr->arguments);
+            if ( functions.size()> 1 ) {
+                vector<TypeDeclPtr> types;
+                for ( const auto & arg : expr->arguments ) {
+                    types.push_back(arg->value->type);
+                }
+                applyLSP(types, functions);
+            }
             if ( generics.size()>1 || functions.size()>1 ) {
                 reportExcess(expr, "too many matching functions or generics ", functions, generics);
             } else if ( functions.size()==0 ) {
@@ -5307,10 +5478,10 @@ namespace das {
         }
 
         // however many casts is where its at
-        int computeSubstituteDistance ( ExprLooksLikeCall * expr, const FunctionPtr & fn ) const {
+        static int computeSubstituteDistance ( const vector<TypeDeclPtr> & arguments, const FunctionPtr & fn ) {
             int distance = 0;
-            for ( size_t i=0; i!=expr->arguments.size(); ++i ) {
-                const auto & argType = expr->arguments[i]->type;
+            for ( size_t i=0; i!=arguments.size(); ++i ) {
+                const auto & argType = arguments[i];
                 const auto & funType = fn->arguments[i]->type;
                 if ( !argType->isSameType ( *funType, RefMatters::no, ConstMatters::no,
                     TemporaryMatters::no, AllowSubstitute::no) ) {
@@ -5438,6 +5609,28 @@ namespace das {
             }
         }
 
+        static void applyLSP ( const vector<TypeDeclPtr> & arguments, vector<FunctionPtr> & functions ) {
+            if ( functions.size()<=1 ) return;
+            vector<pair<int,FunctionPtr>> fnm;
+            for ( auto & fn : functions ) {
+                auto dist = computeSubstituteDistance(arguments, fn);
+                fnm.push_back(make_pair(dist,fn));
+            }
+            sort ( fnm.begin(), fnm.end(), [&] ( auto a, auto b ) {
+                return a.first < b.first;
+            });
+            int count = 1;
+            int depth = fnm[0].first;
+            while ( count < int(fnm.size()) ) {
+                if ( fnm[count].first != depth ) break;
+                count ++;
+            }
+            if ( count == 1 ) {
+                functions.resize(1);
+                functions[0] = fnm[0].second;
+            }
+        }
+
         FunctionPtr inferFunctionCall ( ExprLooksLikeCall * expr ) {
             // infer
             vector<TypeDeclPtr> types;
@@ -5457,26 +5650,7 @@ namespace das {
             }
             auto functions = findMatchingFunctions(expr->name, types, true);
             auto generics = findMatchingGenerics(expr->name, types);
-            if ( functions.size()>1 ) {
-                vector<pair<int,FunctionPtr>> fnm;
-                for ( auto & fn : functions ) {
-                    auto dist = computeSubstituteDistance(expr, fn);
-                    fnm.push_back(make_pair(dist,fn));
-                }
-                sort ( fnm.begin(), fnm.end(), [&] ( auto a, auto b ) {
-                    return a.first < b.first;
-                });
-                int count = 1;
-                int depth = fnm[0].first;
-                while ( count < int(fnm.size()) ) {
-                    if ( fnm[count].first != depth ) break;
-                    count ++;
-                }
-                if ( count == 1 ) {
-                    functions.resize(1);
-                    functions[0] = fnm[0].second;
-                }
-            }
+            applyLSP(types,functions);
             if ( functions.size()==1 ) {
                 auto funcC = functions.back();
                 if ( funcC->firstArgReturnType ) {
@@ -5541,7 +5715,7 @@ namespace das {
                     if ( instancedFunctions.size() > 1 ) {
                         TextWriter ss;
                         for ( auto & instFn : instancedFunctions ) {
-                            ss  << "\t" << instFn->describe() << " in "
+                            ss  << "\t" << describeFunction(instFn) << " in "
                                 << (instFn->module->name.empty() ? "this module" : instFn->module->name)
                                 << "\n";
                         }
@@ -5614,7 +5788,7 @@ namespace das {
                                     }
                                 }
                                 error("unknown type of argument " + clone->arguments[ai]->name
-                                    + "; can't instance " + oneGeneric->describe(), "",
+                                    + "; can't instance " + describeFunction(oneGeneric), "",
                                     "provide argument type explicitly",
                                     expr->at, CompilationError::invalid_type);
                                 return nullptr;
@@ -5625,7 +5799,7 @@ namespace das {
                             auto exf = program->thisModule->functions[clone->getMangledName()];
                             DAS_ASSERTF(exf, "if we can't add, this means there is function with exactly this mangled name");
                             if (exf->fromGeneric != clone->fromGeneric) {
-                                error("can't instance generic " + clone->describe(),
+                                error("can't instance generic " + describeFunction(clone),
                                     + "\ttrying to instance from module " + clone->fromGeneric->module->name + "\n"
                                     + "\texisting instance from module " + exf->fromGeneric->module->name, "",
                                     expr->at, CompilationError::function_already_declared);
@@ -5715,18 +5889,18 @@ namespace das {
             }
             verifyType(expr->makeType);
             if ( expr->makeType->baseType != Type::tVariant ) {
-                error("[[variant" + expr->makeType->describe() + "]] with non-variant type","", "",
+                error("[[variant" + describeType(expr->makeType) + "]] with non-variant type","", "",
                     expr->at, CompilationError::invalid_type);
             }
             if ( expr->makeType->dim.size()>1 ) {
-                error("[[" + expr->makeType->describe() + "]] can only initialize single dimension arrays", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can only initialize single dimension arrays", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->dim.size()==1 && expr->makeType->dim[0]!=int32_t(expr->variants.size()) ) {
-                error("[[" + expr->makeType->describe() + "]] dimension mismatch, provided " +
+                error("[[" + describeType(expr->makeType) + "]] dimension mismatch, provided " +
                     to_string(expr->variants.size()) + " elements", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->ref ) {
-                error("[[" + expr->makeType->describe() + "]] can't be reference", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can't be reference", "", "",
                     expr->at, CompilationError::invalid_type);
             }
         }
@@ -5739,14 +5913,14 @@ namespace das {
                 auto fieldType = expr->makeType->argTypes[fieldVariant];
                 if ( !canCopyOrMoveType(fieldType,decl->value->type,TemporaryMatters::no) ) {
                     error("can't initialize field " + decl->name + "; expecting "
-                        + fieldType->describe() + ", passing " + decl->value->type->describe(),"", "",
+                        + describeType(fieldType) + ", passing " + describeType(decl->value->type),"", "",
                         decl->value->at, CompilationError::invalid_type);
                 }
                 if (!fieldType->canCopy() && !decl->moveSemantics) {
-                    error("field " + decl->name + " can't be copied; " + fieldType->describe(),"","use <- instead",
+                    error("field " + decl->name + " can't be copied; " + describeType(fieldType),"","use <- instead",
                         decl->at, CompilationError::invalid_type);
                 } else if (decl->moveSemantics && decl->value->type->isConst()) {
-                    error("can't move from a constant value " + decl->value->type->describe(), "", "",
+                    error("can't move from a constant value " + describeType(decl->value->type), "", "",
                         decl->value->at, CompilationError::cant_move);
                 }
             } else {
@@ -5783,26 +5957,26 @@ namespace das {
             verifyType(expr->makeType);
             if ( expr->makeType->baseType!=Type::tStructure && expr->makeType->baseType!=Type::tHandle ) {
                 if ( expr->structs.size() ) {
-                    error("[[" + expr->makeType->describe() + "]] with non-structure type", "", "",
+                    error("[[" + describeType(expr->makeType) + "]] with non-structure type", "", "",
                           expr->at, CompilationError::invalid_type);
                 }
             }
             if ( expr->makeType->dim.size()>1 ) {
-                error("[[" + expr->makeType->describe() + "]] can only initialize single dimension arrays", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can only initialize single dimension arrays", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->dim.size()==1 && expr->makeType->dim[0]!=int32_t(expr->structs.size()) ) {
-                error("[[" + expr->makeType->describe() + "]] dimension mismatch, provided " +
+                error("[[" + describeType(expr->makeType) + "]] dimension mismatch, provided " +
                       to_string(expr->structs.size()) + " elements", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->ref ) {
-                error("[[" + expr->makeType->describe() + "]] can't be reference", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can't be reference", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( !expr->makeType->isLocal() && !expr->isNewHandle ) {
-                error("[[" + expr->makeType->describe() + "]] can't make a non local type", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can't make a non local type", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->baseType==Type::tHandle && expr->isNewHandle && !expr->useInitializer ) {
-                error("new [[" + expr->makeType->describe() + "]] requires initializer syntax", "",
-                        "use new [[" + expr->makeType->describe() + "()]] instead",
+                error("new [[" + describeType(expr->makeType) + "]] requires initializer syntax", "",
+                        "use new [[" + describeType(expr->makeType) + "()]] instead",
                     expr->at, CompilationError::invalid_type);
             }
         }
@@ -5825,14 +5999,14 @@ namespace das {
                 if ( auto field = expr->makeType->structType->findField(decl->name) ) {
                     if ( !canCopyOrMoveType(field->type,decl->value->type,TemporaryMatters::no) ) {
                         error("can't initialize field " + decl->name + "; expecting "
-                              +field->type->describe()+", passing "+decl->value->type->describe(), "", "",
+                              + describeType(field->type) + ", passing " + describeType(decl->value->type), "", "",
                                 decl->value->at, CompilationError::invalid_type );
                     }
                     if( !field->type->canCopy() && !decl->moveSemantics ) {
-                        error("field " + decl->name + " can't be copied; " + field->type->describe(),"","use <- instead",
+                        error("field " + decl->name + " can't be copied; " + describeType(field->type),"","use <- instead",
                               decl->at, CompilationError::invalid_type );
                     } else if (decl->moveSemantics && decl->value->type->isConst()) {
-                        error("can't move from a constant value " + decl->value->type->describe(), "", "",
+                        error("can't move from a constant value " + describeType(decl->value->type), "", "",
                             decl->value->at, CompilationError::cant_move);
                     }
                 } else {
@@ -5847,14 +6021,14 @@ namespace das {
                     }
                     if ( !canCopyOrMoveType(fldt,decl->value->type,TemporaryMatters::no) ) {
                         error("can't initialize field " + decl->name + "; expecting "
-                              + fldt->describe()+", passing "+decl->value->type->describe(), "", "",
+                              + describeType(fldt)+", passing " + describeType(decl->value->type), "", "",
                                 decl->value->at, CompilationError::invalid_type );
                     }
                     if( !fldt->canCopy() && !decl->moveSemantics ) {
-                        error("field " + decl->name + " can't be copied; " + fldt->describe(),"","use <- instead",
+                        error("field " + decl->name + " can't be copied; " + describeType(fldt),"","use <- instead",
                               decl->at, CompilationError::invalid_type );
                     } else if (decl->moveSemantics && decl->value->type->isConst()) {
-                        error("can't move from a constant value " + decl->value->type->describe(), "", "",
+                        error("can't move from a constant value " + describeType(decl->value->type), "", "",
                             decl->value->at, CompilationError::cant_move);
                     }
                 } else {
@@ -5873,7 +6047,7 @@ namespace das {
                     expr->makeType = aT;
                     reportAstChanged();
                 } else {
-                    error("undefined [[ ]] expression type " + expr->makeType->describe(),  "", "",
+                    error("undefined [[ ]] expression type " + describeType(expr->makeType),  "", "",
                         expr->makeType->at, CompilationError::type_not_found );
                 }
             }
@@ -5905,11 +6079,11 @@ namespace das {
                         }
                         if ( !arg->type->isSameType(*passT,RefMatters::no,ConstMatters::no,TemporaryMatters::no) ) {
                             error("where closure block argument type mismatch, " +
-                                arg->type->describe() + " vs " + expr->makeType->describe(),  "", "",
+                                describeType(arg->type) + " vs " + describeType(expr->makeType),  "", "",
                                     arg->at, CompilationError::invalid_block );
                         } else if ( arg->type->constant ) {
                             error("where closure block argument can't be constant, " +
-                                arg->type->describe() + " vs " + expr->makeType->describe(),  "", "",
+                                describeType(arg->type) + " vs " + describeType(expr->makeType),  "", "",
                                     arg->at, CompilationError::invalid_block );
                         }
                     }
@@ -5982,7 +6156,7 @@ namespace das {
                         }
                     }
                     if ( !anyInit ) {
-                        error("[[" + expr->makeType->describe() + "() ]] does not have default initializer", "", "",
+                        error("[[" + describeType(expr->makeType) + "() ]] does not have default initializer", "", "",
                               expr->at, CompilationError::invalid_type);
                     } else {
                         expr->useInitializer = false;
@@ -6035,21 +6209,24 @@ namespace das {
                     ens->type = make_smart<TypeDecl>(*et);
                     return ens;
                 } else {
-                    error("[[" + expr->makeType->describe() + "() ]] enumeration is missing 0 value", "", "",
+                    error("[[" + describeType(expr->makeType) + "() ]] enumeration is missing 0 value", "", "",
                           expr->at, CompilationError::invalid_type);
                 }
-            } else if ( expr->type->isWorkhorseType() ) {
-                expr->type->ref = false;
-                reportAstChanged();
-                auto ews = Program::makeConst(expr->at, expr->type, v_zero());
-                ews->type = make_smart<TypeDecl>(*expr->type);
-                return ews;
             } else if ( expr->type->isPointer() ) {
                 expr->type->ref = false;
                 reportAstChanged();
                 auto ews = make_smart<ExprConstPtr>(expr->at);
                 ews->type = make_smart<TypeDecl>(*expr->type);
                 ews->isSmartPtr = expr->type->smartPtr;
+                if ( expr->type->firstType ) {
+                    ews->ptrType = make_smart<TypeDecl>(*expr->type->firstType);
+                }
+                return ews;
+            } else if ( expr->type->isWorkhorseType() ) {
+                expr->type->ref = false;
+                reportAstChanged();
+                auto ews = Program::makeConst(expr->at, expr->type, v_zero());
+                ews->type = make_smart<TypeDecl>(*expr->type);
                 return ews;
             } else if ( !expr->type->isRefType() ) {
                 expr->type->ref = true;
@@ -6068,7 +6245,7 @@ namespace das {
                 return Visitor::visitMakeArrayIndex(expr, index, init, lastField);
             }
             if (!init->type->canCopy() && init->type->canMove() && init->type->isConst()) {
-                error("can't move from a constant value " + init->type->describe(), "", "",
+                error("can't move from a constant value " + describeType(init->type), "", "",
                     init->at, CompilationError::cant_move);
             }
             if ( init->rtti_isMakeLocal() ) {
@@ -6093,7 +6270,7 @@ namespace das {
                 }
                 size_t argCount = expr->values.size();
                 if ( expr->recordType->argTypes.size() != argCount ) {
-                    error("expecting " + to_string(argCount) + " arguments in " + expr->recordType->describe(), "", "",
+                    error("expecting " + to_string(argCount) + " arguments in " + describeType(expr->recordType), "", "",
                         expr->at, CompilationError::invalid_type);
                     return Visitor::visit(expr);
                 }
@@ -6103,7 +6280,7 @@ namespace das {
                     const auto & argT = expr->recordType->argTypes[ai];
                     if ( !argT->isSameType(*val->type,RefMatters::no, ConstMatters::no, TemporaryMatters::no) ) {
                         error("invalid argument _" + to_string(ai) + ", expecting " +
-                                argT->describe() + ", passing " + val->type->describe(), "", "",
+                                describeType(argT) + ", passing " + describeType(val->type), "", "",
                               expr->at, CompilationError::invalid_type);
                     }
                     auto valT = make_smart<TypeDecl>(*argT);
@@ -6153,14 +6330,14 @@ namespace das {
             }
             verifyType(expr->makeType);
             if ( expr->makeType->dim.size()>1 ) {
-                error("[[" + expr->makeType->describe() + "]] can only initialize single dimension arrays", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can only initialize single dimension arrays", "", "",
                       expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->dim.size()==1 && expr->makeType->dim[0]!=int32_t(expr->values.size()) ) {
-                error("[[" + expr->makeType->describe() + "]] dimension mismatch, provided " +
+                error("[[" + describeType(expr->makeType) + "]] dimension mismatch, provided " +
                       to_string(expr->values.size()) + " elements", "", "",
                     expr->at, CompilationError::invalid_type);
             } else if ( expr->makeType->ref ) {
-                error("[[" + expr->makeType->describe() + "]] can't be reference", "", "",
+                error("[[" + describeType(expr->makeType) + "]] can't be reference", "", "",
                     expr->at, CompilationError::invalid_type);
             }
             expr->recordType = make_smart<TypeDecl>(*expr->makeType);
@@ -6191,7 +6368,7 @@ namespace das {
                         }
                         if ( !mkt ) {
                             error("array type can't be infered, "
-                                  + expr->makeType->describe() + " = " + init->type->describe(), "", "",
+                                  + describeType(expr->makeType) + " = " + describeType(init->type), "", "",
                                   init->at, CompilationError::invalid_array_type );
                         } else {
                             mkt->ref = false;
@@ -6211,11 +6388,55 @@ namespace das {
                 return Visitor::visitMakeArrayIndex(expr,index,init,last);
             }
             if ( !canCopyOrMoveType(expr->recordType,init->type,TemporaryMatters::no) ) {
-                error("can't initialize array element " + to_string(index) + "; expecting "
-                      +expr->recordType->describe()+", passing "+init->type->describe(), "", "",
-                        init->at, CompilationError::invalid_type );
+                if ( expr->recordType->isVariant() ) {
+                    int uidx = expr->recordType->getVariantUniqueFieldIndex(init->type);
+                    if ( uidx==-1 ) {
+                        vector<pair<string,TypeDeclPtr>> options;
+                        for ( size_t vi=0; vi != expr->recordType->argTypes.size(); ++vi ) {
+                            const auto & argT = expr->recordType->argTypes[vi];
+                            if ( argT->isSameType(*init->type,RefMatters::no,ConstMatters::no,TemporaryMatters::no,AllowSubstitute::no) ) {
+                                options.emplace_back(expr->recordType->argNames[vi], argT);
+                            }
+                        }
+                        if ( options.size()==0 ) {
+                            error("can't recognize unique variant " + describeType(init->type) + " in " + describeType(expr->recordType), "", "",
+                                init->at, CompilationError::invalid_type);
+                        } else {
+                            if ( verbose ) {
+                                TextWriter tw;
+                                for ( auto & opt : options ) {
+                                    tw << "\t\t" << opt.first << ":" << describeType(opt.second);
+                                    if ( opt!=options.back() )
+                                        tw << "\n";
+                                }
+                                error("can't recognize unique variant " + describeType(init->type) + " in " + describeType(expr->recordType),
+                                    "\tcandidates are:\n" + tw.str(), "",
+                                    init->at, CompilationError::invalid_type);
+                            } else {
+                                error("can't recognize unique variant", "", "",
+                                    init->at, CompilationError::invalid_type);
+                            }
+                        }
+                    } else {
+                        auto mkv = make_smart<ExprMakeVariant>(expr->at);
+                        mkv->variants.push_back(make_smart<MakeFieldDecl>(
+                            init->at,
+                            expr->recordType->argNames[uidx],
+                            init->clone(),
+                            false,          // move
+                            false           // clone
+                        ));
+                        mkv->makeType = make_smart<TypeDecl>(*expr->recordType);
+                        reportAstChanged();
+                        return mkv;
+                    }
+                } else {
+                    error("can't initialize array element " + to_string(index) + "; expecting "
+                        + describeType(expr->recordType)+", passing " + describeType(init->type), "", "",
+                            init->at, CompilationError::invalid_type );
+                }
             } else if ( !expr->recordType->canCopy() && expr->recordType->canMove() && init->type->isConst() ) {
-                error("can't move from a constant value\n\t" + init->type->describe(), "", "",
+                error("can't move from a constant value\n\t" + describeType(init->type), "", "",
                     init->at, CompilationError::cant_move);
             }
             if ( init->rtti_isMakeLocal() ) {
@@ -6231,6 +6452,39 @@ namespace das {
             if ( !expr->recordType ) {
                 return Visitor::visit(expr);
             }
+            if ( expr->recordType->isVariant() ) {
+                bool canPromoteToMakeVariant = true;
+                for ( auto & eval : expr->values ) {
+                    if ( !eval->rtti_isMakeVariant() ) {
+                        canPromoteToMakeVariant = false;
+                        break;
+                    } else {
+                        auto emkv = static_pointer_cast<ExprMakeVariant>(eval);
+                        if ( emkv->variants.size()!=1 ) {
+                            canPromoteToMakeVariant = false;
+                            break;
+                        }
+                    }
+                }
+                if ( canPromoteToMakeVariant ) {
+                        auto mkv = make_smart<ExprMakeVariant>(expr->at);
+                        for ( const auto & eval : expr->values ) {
+                            auto emkv = static_pointer_cast<ExprMakeVariant>(eval);
+                            DAS_ASSERT(emkv->variants.size()==1);
+                            const auto & fmkv = emkv->variants[0];
+                            mkv->variants.push_back(make_smart<MakeFieldDecl>(
+                                fmkv->at,
+                                fmkv->name,
+                                fmkv->value->clone(),
+                                bool(fmkv->moveSemantics),
+                                bool(fmkv->cloneSemantics)
+                            ));
+                        }
+                        mkv->makeType = make_smart<TypeDecl>(*expr->makeType);
+                        reportAstChanged();
+                        return mkv;
+                }
+            }
             if ( !expr->recordType->canCopy() && !expr->recordType->canMove() ) {
                 error("array element has to be copyable or moveable", "", "",
                     expr->at, CompilationError::invalid_type);
@@ -6242,14 +6496,25 @@ namespace das {
                 resT->dim[0] = resDim;
             } else {
                 DAS_ASSERT(expr->values.size()==1);
-                reportAstChanged();
-                auto resExpr = expr->values[0];
-                if ( resExpr->rtti_isMakeTuple() ) {
-                    auto mkt = static_pointer_cast<ExprMakeTuple>(resExpr);
-                    mkt->recordType = make_smart<TypeDecl>(*expr->recordType);
-                    mkt->makeType.reset();
+                auto eval = expr->values[0];
+                if ( !eval->type ) {
+                    error("unknown value type", "", "",
+                        expr->at, CompilationError::invalid_type);
+                    return Visitor::visit(expr);
+                } else if ( !expr->recordType->isSameType(*(eval->type),RefMatters::no,ConstMatters::no,TemporaryMatters::no,AllowSubstitute::no) ) {
+                    error("incompatible value type. expecting " + describeType(expr->recordType) + " vs " + describeType(eval->type), "", "",
+                        eval->at, CompilationError::invalid_type);
+                    return Visitor::visit(expr);
+                } else {
+                    reportAstChanged();
+                    auto resExpr = expr->values[0];
+                    if ( resExpr->rtti_isMakeTuple() ) {
+                        auto mkt = static_pointer_cast<ExprMakeTuple>(resExpr);
+                        mkt->recordType = make_smart<TypeDecl>(*expr->recordType);
+                        mkt->makeType.reset();
+                    }
+                    return resExpr;
                 }
-                return resExpr;
             }
             expr->type = resT;
             verifyType(expr->type);
@@ -6289,11 +6554,13 @@ namespace das {
     // run macros til any of them does work, then reinfer and restart (i.e. infer after each macro)
     void Program::inferTypes(TextWriter &logs, ModuleGroup & libGroup) {
         newLambdaIndex = 1;
-        inferTypesDirty(logs);
-        if ( failed() ) return;
-        bool anyMacrosDidWork;
+        inferTypesDirty(logs, false);
+        bool anyMacrosDidWork = false;
+        bool anyMacrosFailedToInfer = false;
+        if ( failed() ) goto failed_to_infer;
         do {
             anyMacrosDidWork = false;
+            anyMacrosFailedToInfer = false;
             auto modMacro = [&](Module * mod) -> bool {    // we run all macros for each module
                 if ( thisModule->isVisibleDirectly(mod) && mod!=thisModule.get() ) {
                     for ( const auto & pm : mod->macros ) {
@@ -6303,9 +6570,10 @@ namespace das {
                             return false;
                         }
                         if ( anyWork ) {                        // if macro did anything, we done
-                            inferTypesDirty(logs);
+                            inferTypesDirty(logs, true);
                             if ( failed() ) {                   // if it failed to infer types after, we report it
                                 error("macro " + mod->name + "::" + pm->name + " failed to infer", "", "", LineInfo());
+                                anyMacrosFailedToInfer = true;
                                 return false;
                             }
                             anyMacrosDidWork = true;            // if any work been done, we start over
@@ -6320,9 +6588,11 @@ namespace das {
             if (anyMacrosDidWork) continue;
             libGroup.foreach(modMacro, "*");
         } while ( !failed() && anyMacrosDidWork );
+    failed_to_infer:;
+        if ( failed() && !anyMacrosFailedToInfer ) inferTypesDirty(logs, true);
     }
 
-    void Program::inferTypesDirty(TextWriter & logs) {
+    void Program::inferTypesDirty(TextWriter & logs, bool verbose) {
         const bool log = options.getBoolOption("log_infer_passes",false);
         int pass = 0, maxPasses = 50;
         if (auto maxP = options.find("max_infer_passes", Type::tInt)) {
@@ -6335,6 +6605,7 @@ namespace das {
             failToCompile = false;
             errors.clear();
             InferTypes context(this);
+            context.verbose = verbose || log;
             visit(context);
             for ( auto efn : context.extraFunctions ) {
                 addFunction(efn);
