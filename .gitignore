@@ -14,5 +14,5 @@ bin/
 
 
 test.bin
-/include/modules/external_need.inc
-/include/modules/external_resolve.inc
+external_need.inc
+external_resolve.inc
