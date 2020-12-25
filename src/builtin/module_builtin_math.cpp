@@ -588,6 +588,8 @@ namespace das {
                 SideEffects::none,"float3x4_mul")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float3x4_mul_vec3p), SimNode_ExtFuncCall>(*this, lib, "*",
                 SideEffects::none,"float3x4_mul_vec3p")->args({"x","y"});
+            addExtern<DAS_BIND_FUN(float4x4_mul_vec4), SimNode_ExtFuncCall>(*this, lib, "*",
+                SideEffects::none,"float4x4_mul_vec4")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float3x4_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
                 "inverse", SideEffects::none, "float3x4_inverse")->arg("x");
             addExtern<DAS_BIND_FUN(rotate)>(*this, lib, "rotate",
