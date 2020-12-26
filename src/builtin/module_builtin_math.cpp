@@ -490,8 +490,8 @@ namespace das {
         return v_un_quat_from_unit_arc(v_ldu(&v0.x), v_ldu(&v1.x));
     }
 
-    float4 un_quat_from_unit_vec_ang(float3 v, float a) {
-        return v_un_quat_from_unit_vec_ang(v_ldu(&v.x), v_splats(a));
+    float4 un_quat_from_unit_vec_ang(float3 v, float ang) {
+        return v_un_quat_from_unit_vec_ang(v_ldu(&v.x), v_splats(ang));
     }
 
     float4 un_quat(const float4x4 & m) {
@@ -653,6 +653,10 @@ namespace das {
                 "inverse", SideEffects::none, "float4x4_inverse")->arg("x");
             addExtern<DAS_BIND_FUN(rotate)>(*this, lib, "rotate",
                 SideEffects::none, "rotate")->args({"x","y"});
+            addExtern<DAS_BIND_FUN(un_quat_from_unit_arc)>(*this, lib, "un_quat_from_unit_arc",
+                SideEffects::none, "un_quat_from_unit_arc")->args({"v0","v1"});
+            addExtern<DAS_BIND_FUN(un_quat_from_unit_vec_ang)>(*this, lib, "un_quat_from_unit_vec_ang",
+                SideEffects::none, "un_quat_from_unit_vec_ang")->args({"v","ang"});
             // packing
             addExtern<DAS_BIND_FUN(pack_float_to_byte)>(*this, lib, "pack_float_to_byte",
                 SideEffects::none,"pack_float_to_byte")->arg("x");
