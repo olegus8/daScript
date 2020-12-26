@@ -657,6 +657,10 @@ namespace das {
                 SideEffects::none, "un_quat_from_unit_arc")->args({"v0","v1"});
             addExtern<DAS_BIND_FUN(un_quat_from_unit_vec_ang)>(*this, lib, "un_quat_from_unit_vec_ang",
                 SideEffects::none, "un_quat_from_unit_vec_ang")->args({"v","ang"});
+            addExtern<DAS_BIND_FUN(un_quat)>(*this, lib, "un_quat",
+                SideEffects::none, "un_quat")->arg("m");
+            addExtern<DAS_BIND_FUN(quat_mul)>(*this, lib, "quat_mul",
+                SideEffects::none, "quat_mul")->args({"q1","q2"});
             // packing
             addExtern<DAS_BIND_FUN(pack_float_to_byte)>(*this, lib, "pack_float_to_byte",
                 SideEffects::none,"pack_float_to_byte")->arg("x");
