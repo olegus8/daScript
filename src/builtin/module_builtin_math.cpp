@@ -626,6 +626,8 @@ namespace das {
                 SideEffects::none, "float4x4_transpose")->arg("x");
             addExtern<DAS_BIND_FUN(float4x4_persp_forward), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "persp_forward",
                 SideEffects::none, "float4x4_persp_forward")->args({"wk", "hk", "zn", "zf"});
+            addExtern<DAS_BIND_FUN(float4x4_persp_reverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "persp_reverse",
+                SideEffects::none, "float4x4_persp_reverse")->args({"wk", "hk", "zn", "zf"});
             addExtern<DAS_BIND_FUN(float4x4_mul), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "*",
                 SideEffects::none,"float4x4_mul")->args({"x", "y"});
             addExtern<DAS_BIND_FUN(float4x4_equ)>(*this, lib, "==",
