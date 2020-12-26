@@ -455,38 +455,53 @@ namespace das {
         return ret;
     }
 
+    float4x4 float4x4_inverse( const float4x4 & src) {
+        mat44f mat, invMat;
+        memcpy(&mat, &src, sizeof(float4x4));
+        v_mat44_inverse(invMat, mat);
+        return reinterpret_cast<float4x4&>(invMat);;
+    }
+
     float4x4 float4x4_persp_forward(float wk, float hk, float zn, float zf) {
-        mat44f vmat;
-        v_mat44_make_persp_forward(vmat, wk, hk, zn, zf);
-        float4x4 mat;
-        memcpy(&mat, &vmat, sizeof(float4x4));
-        return mat;
+        mat44f mat;
+        v_mat44_make_persp_forward(mat, wk, hk, zn, zf);
+        return reinterpret_cast<float4x4&>(mat);;
     }
 
     float4x4 float4x4_persp_reverse(float wk, float hk, float zn, float zf) {
-        mat44f vmat;
-        v_mat44_make_persp_reverse(vmat, wk, hk, zn, zf);
-        float4x4 mat;
-        memcpy(&mat, &vmat, sizeof(float4x4));
-        return mat;
+        mat44f mat;
+        v_mat44_make_persp_reverse(mat, wk, hk, zn, zf);
+        return reinterpret_cast<float4x4&>(mat);;
     }
 
     float4x4 float4x4_look_at(float4 eye, float4 at, float4 up) {
-        mat44f vmat;
-        v_mat44_make_look_at(vmat, vec_load(&eye.x), vec_load(&at.x), vec_load(&up.x));
-        float4x4 mat;
-        memcpy(&mat, &vmat, sizeof(float4x4));
-        return mat;
+        mat44f mat;
+        v_mat44_make_look_at(mat, vec_load(&eye.x), vec_load(&at.x), vec_load(&up.x));
+        return reinterpret_cast<float4x4&>(mat);;
     }
 
     float4 un_quat_from_unit_arc(float3 v0, float3 v1) {
-        return v_un_quat_from_unit_arc(v_ldu(&v0), v_ldu(&v1));
+        return v_un_quat_from_unit_arc(v_ldu(&v0.x), v_ldu(&v1.x));
+    }
+
+    float4 un_quat_from_unit_vec_ang(float3 v, float a) {
+        return v_un_quat_from_unit_vec_ang(v_ldu(&v.x), v_splats(a));
     }
 
     float4 un_quat(const float4x4 & m) {
         mat44f vm;
         memcpy(&vm, &m, sizeof(float4x4));
         return v_un_quat_from_mat4(vm);
+    }
+
+    float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
+        mat44f mat;
+        v_mat44_compose(mat, vec_load(&pos.x) vec_load(&rot.x), vec_load(&scale.x));
+        return reinterpret_cast<float4x4&>(mat);;
+    }
+
+    float4 quat_mul(float4 q1, float4 q2) {
+        return v_quat_mul_quat(vec_load(&q1.x), vec_load(&q2.x));
     }
 
     class Module_Math : public Module {
