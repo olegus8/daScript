@@ -482,7 +482,7 @@ namespace das {
 
     float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
         mat44f mat;
-        v_mat44_compose(mat, vec_load(&pos.x) vec_load(&rot.x), vec_load(&scale.x));
+        v_mat44_compose(mat, vec_load(&pos.x), vec_load(&rot.x), vec_load(&scale.x));
         return reinterpret_cast<float4x4&>(mat);;
     }
 
