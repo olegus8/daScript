@@ -455,6 +455,40 @@ namespace das {
         return ret;
     }
 
+    float4x4 float4x4_persp_forward(float wk, float hk, float zn, float zf) {
+        mat44f vmat;
+        v_mat44_make_persp_forward(vmat, wk, hk, zn, zf);
+        float4x4 mat;
+        memcpy(&mat, &vmat, sizeof(float4x4));
+        return mat;
+    }
+
+    float4x4 float4x4_persp_reverse(float wk, float hk, float zn, float zf) {
+        mat44f vmat;
+        v_mat44_make_persp_reverse(vmat, wk, hk, zn, zf);
+        float4x4 mat;
+        memcpy(&mat, &vmat, sizeof(float4x4));
+        return mat;
+    }
+
+    float4x4 float4x4_look_at(float4 eye, float4 at, float4 up) {
+        mat44f vmat;
+        v_mat44_make_look_at(vmat, vec_load(&eye.x), vec_load(&at.x), vec_load(&up.x));
+        float4x4 mat;
+        memcpy(&mat, &vmat, sizeof(float4x4));
+        return mat;
+    }
+
+    float4 un_quat_from_unit_arc(float3 v0, float3 v1) {
+        return v_un_quat_from_unit_arc(v_ldu(&v0), v_ldu(&v1));
+    }
+
+    float4 un_quat(const float4x4 & m) {
+        mat44f vm;
+        memcpy(&vm, &m, sizeof(float4x4));
+        return v_un_quat_from_mat4(vm);
+    }
+
     class Module_Math : public Module {
     public:
         Module_Math() : Module("math") {
