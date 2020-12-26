@@ -480,6 +480,12 @@ namespace das {
         return reinterpret_cast<float4x4&>(mat);;
     }
 
+    float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
+        mat44f mat;
+        v_mat44_compose(mat, vec_load(&pos.x) vec_load(&rot.x), vec_load(&scale.x));
+        return reinterpret_cast<float4x4&>(mat);;
+    }
+
     float4 un_quat_from_unit_arc(float3 v0, float3 v1) {
         return v_un_quat_from_unit_arc(v_ldu(&v0.x), v_ldu(&v1.x));
     }
@@ -492,12 +498,6 @@ namespace das {
         mat44f vm;
         memcpy(&vm, &m, sizeof(float4x4));
         return v_un_quat_from_mat4(vm);
-    }
-
-    float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
-        mat44f mat;
-        v_mat44_compose(mat, vec_load(&pos.x) vec_load(&rot.x), vec_load(&scale.x));
-        return reinterpret_cast<float4x4&>(mat);;
     }
 
     float4 quat_mul(float4 q1, float4 q2) {
