@@ -476,7 +476,7 @@ namespace das {
 
     float4x4 float4x4_look_at(float4 eye, float4 at, float4 up) {
         mat44f mat;
-        v_mat44_make_look_at(mat, vec_load(&eye.x), vec_load(&at.x), vec_load(&up.x));
+        v_mat44_make_look_at(mat, eye, at, up);
         return reinterpret_cast<float4x4&>(mat);;
     }
 
