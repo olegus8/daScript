@@ -624,6 +624,8 @@ namespace das {
                  SideEffects::none, "float_4x4_translation")->arg("xyz");
             addExtern<DAS_BIND_FUN(float4x4_transpose), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "transpose",
                 SideEffects::none, "float4x4_transpose")->arg("x");
+            addExtern<DAS_BIND_FUN(float4x4_persp_forward), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "persp_forward",
+                SideEffects::none, "float4x4_persp_forward")->args({"wk", "hk", "zn", "zf"});
             addExtern<DAS_BIND_FUN(float4x4_mul), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "*",
                 SideEffects::none,"float4x4_mul")->args({"x", "y"});
             addExtern<DAS_BIND_FUN(float4x4_equ)>(*this, lib, "==",
@@ -641,6 +643,8 @@ namespace das {
                 SideEffects::none,"float4x4_mul_vec4")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float3x4_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
                 "inverse", SideEffects::none, "float3x4_inverse")->arg("x");
+            addExtern<DAS_BIND_FUN(float4x4_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
+                "inverse", SideEffects::none, "float4x4_inverse")->arg("x");
             addExtern<DAS_BIND_FUN(rotate)>(*this, lib, "rotate",
                 SideEffects::none, "rotate")->args({"x","y"});
             // packing
