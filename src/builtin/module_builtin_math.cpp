@@ -482,7 +482,7 @@ namespace das {
 
     float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
         mat44f mat;
-        v_mat44_compose(mat, vec_load(&pos.x), vec_load(&rot.x), vec_load(&scale.x));
+        v_mat44_compose(mat, pos, rot, scale);
         return reinterpret_cast<float4x4&>(mat);;
     }
 
@@ -501,7 +501,7 @@ namespace das {
     }
 
     float4 quat_mul(float4 q1, float4 q2) {
-        return v_quat_mul_quat(vec_load(&q1.x), vec_load(&q2.x));
+        return v_quat_mul_quat(q1, q2);
     }
 
     class Module_Math : public Module {
