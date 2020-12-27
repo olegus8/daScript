@@ -462,6 +462,13 @@ namespace das {
         return reinterpret_cast<float4x4&>(invMat);;
     }
 
+    float4x4 float4x4_orthonormal_inverse( const float4x4 & src) {
+        mat44f mat, invMat;
+        memcpy(&mat, &src, sizeof(float4x4));
+        v_mat44_orthonormal_inverse43(invMat, mat);
+        return reinterpret_cast<float4x4&>(invMat);;
+    }
+
     float4x4 float4x4_persp_forward(float wk, float hk, float zn, float zf) {
         mat44f mat;
         v_mat44_make_persp_forward(mat, wk, hk, zn, zf);
@@ -672,7 +679,9 @@ namespace das {
             addExtern<DAS_BIND_FUN(float3x4_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
                 "inverse", SideEffects::none, "float3x4_inverse")->arg("x");
             addExtern<DAS_BIND_FUN(float4x4_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
-                "inverse", SideEffects::none, "float4x4_inverse")->arg("x");
+                "inverse", SideEffects::none, "float4x4_inverse")->arg("m");
+            addExtern<DAS_BIND_FUN(float4x4_orthonormal_inverse), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib,
+                "orthonormal_inverse", SideEffects::none, "float4x4_orthonormal_inverse")->arg("m");
             addExtern<DAS_BIND_FUN(rotate)>(*this, lib, "rotate",
                 SideEffects::none, "rotate")->args({"x","y"});
             addExtern<DAS_BIND_FUN(un_quat_from_unit_arc)>(*this, lib, "un_quat_from_unit_arc",
