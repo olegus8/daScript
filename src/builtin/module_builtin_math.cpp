@@ -486,6 +486,18 @@ namespace das {
         return reinterpret_cast<float4x4&>(mat);;
     }
 
+    void float4x4_decompose(const float4x4 & mat, float3 & pos, float4 & rot, float4 & scale) {
+        mat44f gmat;
+        memcpy(&gmat, &mat, sizeof(float4x4));
+        vec3f gpos;
+        quat4f grot;
+        vec4f gscale;
+        v_mat44_decompose(gmat, gpos, grot, gscale);
+        pos = gpos;
+        rot = grot;
+        scale = gscale;
+    }
+
     float4 un_quat_from_unit_arc(float3 v0, float3 v1) {
         return v_un_quat_from_unit_arc(v_ldu(&v0.x), v_ldu(&v1.x));
     }
@@ -634,6 +646,8 @@ namespace das {
                 SideEffects::none, "float4x4_compose")->args({"pos", "rot", "scale"});
             addExtern<DAS_BIND_FUN(float4x4_mul), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "*",
                 SideEffects::none,"float4x4_mul")->args({"x", "y"});
+            addExtern<DAS_BIND_FUN(float4x4_decompose)>(*this, lib, "decompose",
+                SideEffects::none, "float4x4_decompose")->args({"mat","pos","rot","scale"});
             addExtern<DAS_BIND_FUN(float4x4_equ)>(*this, lib, "==",
                 SideEffects::none, "float4x4_equ")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float4x4_nequ)>(*this, lib, "!=",
