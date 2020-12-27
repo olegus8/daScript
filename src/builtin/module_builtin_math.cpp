@@ -662,7 +662,7 @@ namespace das {
             addExtern<DAS_BIND_FUN(float4x4_mul), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "*",
                 SideEffects::none,"float4x4_mul")->args({"x", "y"});
             addExtern<DAS_BIND_FUN(float4x4_decompose)>(*this, lib, "decompose",
-                SideEffects::none, "float4x4_decompose")->args({"mat","pos","rot","scale"});
+                SideEffects::modifyArgument, "float4x4_decompose")->args({"mat","pos","rot","scale"});
             addExtern<DAS_BIND_FUN(float4x4_equ)>(*this, lib, "==",
                 SideEffects::none, "float4x4_equ")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float4x4_nequ)>(*this, lib, "!=",
