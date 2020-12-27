@@ -520,6 +520,10 @@ namespace das {
         return v_quat_mul_vec3(q, v);
     }
 
+    float4 quat_conjugate(float4 q) {
+        return v_quat_conjugate(q);
+    }
+
     class Module_Math : public Module {
     public:
         Module_Math() : Module("math") {
@@ -681,6 +685,8 @@ namespace das {
                 SideEffects::none, "quat_mul")->args({"q1","q2"});
             addExtern<DAS_BIND_FUN(quat_mul_vec)>(*this, lib, "quat_mul_vec",
                 SideEffects::none, "quat_mul_vec")->args({"q","v"});
+            addExtern<DAS_BIND_FUN(quat_conjugate)>(*this, lib, "quat_conjugate",
+                SideEffects::none, "quat_conjugate")->arg("q");
             // packing
             addExtern<DAS_BIND_FUN(pack_float_to_byte)>(*this, lib, "pack_float_to_byte",
                 SideEffects::none,"pack_float_to_byte")->arg("x");
