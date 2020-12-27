@@ -476,14 +476,26 @@ namespace das {
 
     float4x4 float4x4_look_at(float4 eye, float4 at, float4 up) {
         mat44f mat;
-        v_mat44_make_look_at(mat, vec_load(&eye.x), vec_load(&at.x), vec_load(&up.x));
+        v_mat44_make_look_at(mat, eye, at, up);
         return reinterpret_cast<float4x4&>(mat);;
     }
 
     float4x4 float4x4_compose(float4 pos, float4 rot, float4 scale) {
         mat44f mat;
-        v_mat44_compose(mat, vec_load(&pos.x), vec_load(&rot.x), vec_load(&scale.x));
+        v_mat44_compose(mat, pos, rot, scale);
         return reinterpret_cast<float4x4&>(mat);;
+    }
+
+    void float4x4_decompose(const float4x4 & mat, float3 & pos, float4 & rot, float4 & scale) {
+        mat44f gmat;
+        memcpy(&gmat, &mat, sizeof(float4x4));
+        vec3f gpos;
+        quat4f grot;
+        vec4f gscale;
+        v_mat4_decompose(gmat, gpos, grot, gscale);
+        pos = gpos;
+        rot = grot;
+        scale = gscale;
     }
 
     float4 un_quat_from_unit_arc(float3 v0, float3 v1) {
@@ -501,7 +513,11 @@ namespace das {
     }
 
     float4 quat_mul(float4 q1, float4 q2) {
-        return v_quat_mul_quat(vec_load(&q1.x), vec_load(&q2.x));
+        return v_quat_mul_quat(q1, q2);
+    }
+
+    float3 quat_mul_vec(float4 q, float3 v) {
+        return v_quat_mul_vec3(q, v);
     }
 
     class Module_Math : public Module {
@@ -634,6 +650,8 @@ namespace das {
                 SideEffects::none, "float4x4_compose")->args({"pos", "rot", "scale"});
             addExtern<DAS_BIND_FUN(float4x4_mul), SimNode_ExtFuncCallAndCopyOrMove>(*this, lib, "*",
                 SideEffects::none,"float4x4_mul")->args({"x", "y"});
+            addExtern<DAS_BIND_FUN(float4x4_decompose)>(*this, lib, "decompose",
+                SideEffects::none, "float4x4_decompose")->args({"mat","pos","rot","scale"});
             addExtern<DAS_BIND_FUN(float4x4_equ)>(*this, lib, "==",
                 SideEffects::none, "float4x4_equ")->args({"x","y"});
             addExtern<DAS_BIND_FUN(float4x4_nequ)>(*this, lib, "!=",
@@ -661,6 +679,8 @@ namespace das {
                 SideEffects::none, "un_quat")->arg("m");
             addExtern<DAS_BIND_FUN(quat_mul)>(*this, lib, "quat_mul",
                 SideEffects::none, "quat_mul")->args({"q1","q2"});
+            addExtern<DAS_BIND_FUN(quat_mul_vec)>(*this, lib, "quat_mul_vec",
+                SideEffects::none, "quat_mul_vec")->args({"q","v"});
             // packing
             addExtern<DAS_BIND_FUN(pack_float_to_byte)>(*this, lib, "pack_float_to_byte",
                 SideEffects::none,"pack_float_to_byte")->arg("x");
