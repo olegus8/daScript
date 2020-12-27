@@ -492,7 +492,7 @@ namespace das {
         vec3f gpos;
         quat4f grot;
         vec4f gscale;
-        v_mat44_decompose(gmat, gpos, grot, gscale);
+        v_mat4_decompose(gmat, gpos, grot, gscale);
         pos = gpos;
         rot = grot;
         scale = gscale;
