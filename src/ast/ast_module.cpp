@@ -83,6 +83,7 @@ namespace das {
     void resetFusionEngine();
 
     void Module::Shutdown() {
+        ReuseGuard<TypeDecl> rguard;
         shutdownDebugAgent();
         auto m = modules;
         while ( m ) {
@@ -91,6 +92,7 @@ namespace das {
             delete pM;
         }
         resetFusionEngine();
+        ReuseAllocator<TypeDecl>::canHold = false;
     }
 
     void Module::foreach ( const callable<bool (Module * module)> & func ) {
@@ -144,12 +146,13 @@ namespace das {
         }
     }
 
-    void Module::promoteToBuiltin() {
+    void Module::promoteToBuiltin(const FileAccessPtr & access) {
         DAS_ASSERTF(!builtIn, "failed to promote. already builtin");
         next = modules;
         modules = this;
         builtIn = true;
         promoted = true;
+        promotedAccess = access;
     }
 
     Module::~Module() {
