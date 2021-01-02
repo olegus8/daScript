@@ -763,7 +763,7 @@ namespace das
     class Module {
     public:
         Module ( const string & n = "" );
-        void promoteToBuiltin();
+        void promoteToBuiltin(const FileAccessPtr & access);
         virtual ~Module();
         virtual void addPrerequisits ( ModuleLibrary & ) const {}
         virtual ModuleAotType aotRequire ( TextWriter & ) const { return ModuleAotType::no_aot; }
@@ -859,6 +859,7 @@ namespace das
         Module * next = nullptr;
         static Module * modules;
         unique_ptr<FileInfo>    ownFileInfo;
+        FileAccessPtr           promotedAccess;
     };
 
     #define REGISTER_MODULE(ClassName) \
@@ -1129,6 +1130,18 @@ namespace das
 
     // this one collectes dependencies and compiles with modules
     ProgramPtr compileDaScript ( const string & fileName, const FileAccessPtr & access, TextWriter & logs, ModuleGroup & libGroup, bool exportAll = false, CodeOfPolicies policies = CodeOfPolicies() );
+
+    // collect script prerequisits
+    bool getPrerequisits ( const string & fileName,
+                          const FileAccessPtr & access,
+                          vector<ModuleInfo> & req,
+                          vector<string> & missing,
+                          vector<string> & circular,
+                          das_set<string> & dependencies,
+                          ModuleGroup & libGroup,
+                          TextWriter * log,
+                          int tab,
+                          bool allowPromoted );
 
 
     // note: this has sifnificant performance implications
