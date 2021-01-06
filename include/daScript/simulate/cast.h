@@ -205,12 +205,19 @@ namespace das
 
     
 #if defined(__APPLE__)
-    static_assert(sizeof(size_t) == 8);
-    template <>
-    struct cast <size_t> {
-        static __forceinline size_t to ( vec4f x )           { return v_extract_xi64(v_cast_vec4i(x)); }
-        static __forceinline vec4f from ( size_t x )         { return v_cast_vec4f(v_splatsi64(x)); }
-    };
+    #if CMAKE_SIZEOF_VOID_P == 8
+        template <>
+        struct cast <size_t> {
+            static __forceinline size_t to ( vec4f x )           { return v_extract_xi64(v_cast_vec4i(x)); }
+            static __forceinline vec4f from ( size_t x )         { return v_cast_vec4f(v_splatsi64(x)); }
+        };
+    #elif CMAKE_SIZEOF_VOID_P == 4
+        template <>
+        struct cast <size_t> {
+            static __forceinline size_t to ( vec4f x )           { return v_extract_xi(v_cast_vec4i(x)); }
+            static __forceinline vec4f from ( size_t x )         { return v_cast_vec4f(v_splatsi(x)); }
+        };
+    #endif
 #endif
 
     template <>
