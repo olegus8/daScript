@@ -216,7 +216,6 @@ namespace das {
 #if defined(__APPLE__)
     // note - under MSVC size_t is unsigned __int64 (or 32) accordingly
     template<> struct ToBasicType<size_t>       { enum { type = sizeof(size_t)==8 ? Type::tUInt64 : Type::tUInt }; };
-    template<> struct ToBasicType<unsigned long> { enum { type = sizeof(size_t)==8 ? Type::tUInt64 : Type::tUInt }; };
 #endif
     template<> struct ToBasicType<float2>       { enum { type = Type::tFloat2 }; };
     template<> struct ToBasicType<float3>       { enum { type = Type::tFloat3 }; };
