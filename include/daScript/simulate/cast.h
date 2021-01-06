@@ -203,6 +203,16 @@ namespace das
         static __forceinline vec4f from ( int64_t x )          { return v_cast_vec4f(v_splatsi64(x)); }
     };
 
+    
+#if defined(__APPLE__)
+    static_assert(sizeof(size_t) == 8);
+    template <>
+    struct cast <size_t> {
+        static __forceinline size_t to ( vec4f x )           { return v_extract_xi64(v_cast_vec4i(x)); }
+        static __forceinline vec4f from ( size_t x )         { return v_cast_vec4f(v_splatsi64(x)); }
+    };
+#endif
+
     template <>
     struct cast <uint64_t> {
         static __forceinline uint64_t to ( vec4f x )           { return v_extract_xi64(v_cast_vec4i(x)); }
