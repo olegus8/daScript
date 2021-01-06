@@ -205,13 +205,13 @@ namespace das
 
     
 #if defined(__APPLE__)
-    #if SIZE_OF_SIZE_T == 8
+    #if SIZE_OF_VOID_P == 8
         template <>
         struct cast <size_t> {
             static __forceinline size_t to ( vec4f x )           { return v_extract_xi64(v_cast_vec4i(x)); }
             static __forceinline vec4f from ( size_t x )         { return v_cast_vec4f(v_splatsi64(x)); }
         };
-    #elif SIZE_OF_SIZE_T == 4
+    #elif SIZE_OF_VOID_P == 4
         template <>
         struct cast <size_t> {
             static __forceinline size_t to ( vec4f x )           { return v_extract_xi(v_cast_vec4i(x)); }
