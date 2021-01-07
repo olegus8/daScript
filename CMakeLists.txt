@@ -16,6 +16,8 @@ FIND_FLEX_AND_BISON()
 
 SETUP_COMPILER()
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 SET(DAS_MODULES_RESOLVE_INC ${PROJECT_SOURCE_DIR}/include/modules/external_resolve.inc)
 SET(DAS_MODULES_NEED_INC ${PROJECT_SOURCE_DIR}/include/modules/external_need.inc)
@@ -53,6 +55,8 @@ ADD_CUSTOM_COMMAND(
     VERBATIM
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DAS_MODULES_RESOLVE_INC}.temp  ${DAS_MODULES_RESOLVE_INC}
 )
+
+ADD_CUSTOM_TARGET(need_and_resolve ALL DEPENDS ${DAS_MODULES_NEED_INC} {DAS_MODULES_RESOLVE_INC})
 
 FLEX(src/parser/ds_lexer.lpp)
 BISON(src/parser/ds_parser.ypp)
@@ -154,6 +158,7 @@ src/builtin/ast_gen.inc
 src/builtin/module_builtin_fio.cpp
 src/builtin/module_builtin_network.cpp
 src/builtin/module_builtin_debugger.cpp
+src/builtin/module_builtin_jobque.cpp
 src/builtin/debugapi_gen.inc
 src/builtin/module_file_access.cpp
 src/builtin/builtin.das.inc
@@ -198,9 +203,11 @@ include/daScript/misc/sysos.h
 include/daScript/misc/callable.h
 include/daScript/misc/debug_break.h
 include/daScript/misc/instance_debugger.h
-src/misc//sysos.cpp
+include/daScript/misc/job_que.h
+src/misc/sysos.cpp
 src/misc/string_writer.cpp
 src/misc/memory_model.cpp
+src/misc/job_que.cpp
 )
 list(SORT MISC_SRC)
 SOURCE_GROUP_FILES("misc" MISC_SRC)
@@ -304,6 +311,7 @@ include/daScript/simulate/aot_builtin_fio.h
 include/daScript/simulate/aot_builtin_rtti.h
 include/daScript/simulate/aot_builtin_ast.h
 include/daScript/simulate/aot_builtin_debugger.h
+include/daScript/simulate/aot_builtin_jobque.h
 include/daScript/simulate/fs_file_info.h
 src/simulate/fs_file_info.cpp
 ${DAS_MODULES_RESOLVE_INC}
@@ -357,8 +365,8 @@ ${DAS_MODULES_NEED_INC}
 SOURCE_GROUP_FILES("main" DASAOT_MAIN_SRC)
 
 add_executable(dasAot ${DASAOT_MAIN_SRC} )
-TARGET_LINK_LIBRARIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(dasAot libDaScript libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser Threads::Threads ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(dasAot libDaScript libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser  need_and_resolve ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasAot)
 SETUP_LTO(dasAot)
 
@@ -516,46 +524,10 @@ ${DAS_MODULES_NEED_INC}
 SOURCE_GROUP_FILES("main" DASCONTDEV_MAIN_SRC)
 
 add_executable(dasContDev ${DASCONTDEV_MAIN_SRC})
-TARGET_LINK_LIBRARIES(dasContDev libDaScript libDasModuleUriparser libUriParser libPathTracerHelper libDaScriptProfile libDaScriptTest ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(dasContDev libDaScript libDasModuleUriparser libUriParser libPathTracerHelper libDaScriptProfile libDaScriptTest ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(dasContDev libDaScript libDasModuleUriparser libUriParser libDaScriptProfile libDaScriptTest Threads::Threads ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(dasContDev libDaScript libDasModuleUriparser libUriParser libDaScriptProfile libDaScriptTest  need_and_resolve ${DAS_MODULES_LIBS})
 SETUP_CPP11(dasContDev)
 SETUP_LTO(dasContDev)
-
-# PathTracer helper
-
-SET(PATH_TRACER_HELPER_MAIN_SRC
-examples/pathTracer/path_tracer_helper.h
-examples/pathTracer/path_tracer_helper.cpp
-)
-
-ADD_LIBRARY(libPathTracerHelper ${PATH_TRACER_HELPER_MAIN_SRC})
-SETUP_CPP11(libPathTracerHelper)
-ADD_DEPENDENCIES(libPathTracerHelper libDaScript)
-
-# PathTracer
-
-SET(PATH_TRACER_MAIN_SRC
-examples/pathTracer/main.cpp
-examples/pathTracer/path_tracer_helper.h
-examples/pathTracer/toy_path_tracer.das
-)
-SOURCE_GROUP_FILES("source" PATH_TRACER_MAIN_SRC)
-
-add_custom_target(pathTracerAot)
-SET(PATH_TRACER_GEN_SRC)
-DAS_AOT(examples/pathTracer/toy_path_tracer.das PATH_TRACER_GEN_SRC pathTracerAot dasAot)
-SOURCE_GROUP_FILES("generated" PATH_TRACER_GEN_SRC)
-
-add_executable(pathTracer ${PATH_TRACER_MAIN_SRC} ${PATH_TRACER_GEN_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(pathTracer libDaScript libPathTracerHelper)
-IF (UNIX)
-  TARGET_LINK_LIBRARIES(pathTracer pthread)
-ENDIF()
-ADD_DEPENDENCIES(pathTracer libDaScript libPathTracerHelper)
-TARGET_INCLUDE_DIRECTORIES(pathTracer PUBLIC examples/pathTracer)
-SETUP_CPP11(pathTracer)
-add_dependencies(pathTracer pathTracerAot dasAotStub)
-#target_precompile_headers(pathTracer PUBLIC include/daScript/misc/platform.h)
 
 # Stand alone command line compiler
 
@@ -566,8 +538,8 @@ ${DAS_MODULES_NEED_INC}
 SOURCE_GROUP_FILES("main" DASCRIPT_MAIN_SRC)
 
 add_executable(daScript ${DASCRIPT_MAIN_SRC})
-TARGET_LINK_LIBRARIES(daScript libDaScript libDasModuleUriparser libUriParser libPathTracerHelper libDaScriptProfile libDaScriptTest ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(daScript libDaScript libDasModuleUriparser libUriParser libPathTracerHelper libDaScriptProfile libDaScriptTest ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(daScript libDaScript libDasModuleUriparser libUriParser libDaScriptProfile libDaScriptTest Threads::Threads ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(daScript libDaScript libDasModuleUriparser libUriParser libDaScriptProfile libDaScriptTest  need_and_resolve ${DAS_MODULES_LIBS})
 SETUP_CPP11(daScript)
 SETUP_LTO(daScript)
 
@@ -643,7 +615,7 @@ SOURCE_GROUP_FILES("generated" TEST_GENERATED_SRC)
 
 add_executable(daScriptTest ${UNIT_TEST_SRC} ${COMPILATION_FAIL_TEST_SRC} ${MIX_TEST_SRC} ${MODULE_TEST_SRC}
     ${TEST_MAIN_SRC} ${OPTIMIZATION_SRC} ${RUNTIME_ERRORS_SRC} ${TEST_GENERATED_SRC} ${AOT_GENERATED_SRC})
-TARGET_LINK_LIBRARIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser Threads::Threads ${DAS_MODULES_LIBS})
 ADD_DEPENDENCIES(daScriptTest libDaScript libDaScriptTest libDaScriptProfile libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 TARGET_INCLUDE_DIRECTORIES(daScriptTest PUBLIC examples/test)
 SETUP_CPP11(daScriptTest)
@@ -685,7 +657,7 @@ SOURCE_GROUP_FILES("generated" PROFILE_GENERATED_SRC)
 
 add_executable(daScriptProfile ${PROFILE_SRC} ${PROFILE_MAIN_SRC} ${PROFILE_GENERATED_SRC} ${AOT_GENERATED_SRC})
 TARGET_INCLUDE_DIRECTORIES(daScriptProfile PUBLIC examples/profile)
-TARGET_LINK_LIBRARIES(daScriptProfile libDaScript libDaScriptProfile)
+TARGET_LINK_LIBRARIES(daScriptProfile libDaScript libDaScriptProfile Threads::Threads)
 ADD_DEPENDENCIES(daScriptProfile libDaScript dasAot libDaScriptProfile)
 SETUP_CPP11(daScriptProfile)
 add_dependencies(daScriptProfile daScriptProfileAot dasAotStub)
@@ -693,7 +665,7 @@ add_dependencies(daScriptProfile daScriptProfileAot dasAotStub)
 
 MACRO(DAS_TUTORIAL tutorial_name tutorial_src)
     add_executable(${tutorial_name} ${tutorial_src})
-    TARGET_LINK_LIBRARIES(${tutorial_name} libDaScript)
+    TARGET_LINK_LIBRARIES(${tutorial_name} libDaScript Threads::Threads)
     ADD_DEPENDENCIES(${tutorial_name} libDaScript)
     SETUP_CPP11(${tutorial_name})
 ENDMACRO()
@@ -738,8 +710,8 @@ utils/dasAot/main.cpp
 )
 add_executable(tutorial02_dasAot ${TUTORIAL_02_DASAOT_MAIN_SRC} )
 target_compile_definitions(tutorial02_dasAot PUBLIC MAIN_FUNC_NAME=das_aot_main)
-TARGET_LINK_LIBRARIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
-ADD_DEPENDENCIES(tutorial02_dasAot libDaScript libPathTracerHelper libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+TARGET_LINK_LIBRARIES(tutorial02_dasAot libDaScript libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
+ADD_DEPENDENCIES(tutorial02_dasAot libDaScript libDaScriptProfile libDaScriptTest libDasModuleUriparser libUriParser ${DAS_MODULES_LIBS})
 SETUP_CPP11(tutorial02_dasAot)
 SETUP_LTO(tutorial02_dasAot)
 
