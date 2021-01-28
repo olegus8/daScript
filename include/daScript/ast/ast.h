@@ -238,6 +238,7 @@ namespace das
                 bool    generated : 1;
                 bool    capture_as_ref : 1;
                 bool    can_shadow : 1;             // can shadow block or function arguments, as block argument
+                bool    private_variable : 1;
             };
             uint32_t flags = 0;
         };
@@ -290,6 +291,8 @@ namespace das
         virtual bool verifyCall ( ExprCallFunc * /*call*/, const AnnotationArgumentList & /*args*/, string & /*err*/ ) { return true; }
         virtual ExpressionPtr transformCall ( ExprCallFunc * /*call*/, string & /*err*/ ) { return nullptr; }
         virtual string aotName ( ExprCallFunc * call );
+        virtual string aotArgumentPrefix ( ExprCallFunc * /*call*/, int /*argIndex*/ ) { return ""; }
+        virtual string aotArgumentSuffix ( ExprCallFunc * /*call*/, int /*argIndex*/ ) { return ""; }
         virtual void aotPrefix ( TextWriter &, ExprCallFunc * ) { }
         virtual bool isGeneric() const { return false; }
     };
@@ -592,6 +595,8 @@ namespace das
         LineInfo getConceptLocation(const LineInfo & at) const;
         virtual string getAotBasicName() const { return name; }
         string getAotName(ExprCallFunc * call) const;
+        string getAotArgumentPrefix(ExprCallFunc * call, int index) const;
+        string getAotArgumentSuffix(ExprCallFunc * call, int index) const;
         FunctionPtr setAotTemplate();
     public:
         AnnotationList      annotations;
@@ -842,7 +847,7 @@ namespace das
         mutable das_map<string, ExprCallFactory>    callThis;
         das_map<string, TypeInfoMacroPtr>           typeInfoMacros;
         das_map<uint32_t, uint64_t>                 annotationData;
-        das_map<Module *,bool>                      requireModule;      // visibility modules
+        das_safe_map<Module *,bool>                 requireModule;      // visibility modules
         vector<PassMacroPtr>                        macros;             // infer macros (clean infer, assume no errors)
         vector<PassMacroPtr>                        inferMacros;        // infer macros (dirty infer, assume half-way-there tree)
         vector<PassMacroPtr>                        optimizationMacros; // optimization macros
@@ -890,6 +895,7 @@ namespace das
         void addBuiltInModule ();
         void addModule ( Module * module );
         void foreach ( const callable<bool (Module * module)> & func, const string & name ) const;
+        void foreach_in_order ( const callable<bool (Module * module)> & func, Module * thisM ) const;
         vector<TypeDeclPtr> findAlias ( const string & name, Module * inWhichModule ) const;
         vector<AnnotationPtr> findAnnotation ( const string & name, Module * inWhichModule ) const;
         vector<TypeInfoMacroPtr> findTypeInfoMacro ( const string & name, Module * inWhichModule ) const;
@@ -1107,6 +1113,7 @@ namespace das
                 bool    isCompilingMacros : 1;
                 bool    needMacroModule : 1;
                 bool    promoteToBuiltin : 1;
+                bool    isDependency : 1;
             };
             uint32_t    flags = 0;
         };
@@ -1128,10 +1135,12 @@ namespace das
     Func adapt ( const char * funcName, char * pClass, const StructInfo * info );
 
     // this one works for single module only
-    ProgramPtr parseDaScript ( const string & fileName, const FileAccessPtr & access, TextWriter & logs, ModuleGroup & libGroup, bool exportAll = false, CodeOfPolicies policies = CodeOfPolicies() );
+    ProgramPtr parseDaScript ( const string & fileName, const FileAccessPtr & access,
+        TextWriter & logs, ModuleGroup & libGroup, bool exportAll = false, bool isDep = false, CodeOfPolicies policies = CodeOfPolicies() );
 
     // this one collectes dependencies and compiles with modules
-    ProgramPtr compileDaScript ( const string & fileName, const FileAccessPtr & access, TextWriter & logs, ModuleGroup & libGroup, bool exportAll = false, CodeOfPolicies policies = CodeOfPolicies() );
+    ProgramPtr compileDaScript ( const string & fileName, const FileAccessPtr & access,
+        TextWriter & logs, ModuleGroup & libGroup, bool exportAll = false, CodeOfPolicies policies = CodeOfPolicies() );
 
     // collect script prerequisits
     bool getPrerequisits ( const string & fileName,
