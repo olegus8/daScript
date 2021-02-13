@@ -125,6 +125,8 @@ IF(CLANG_BIN_EXE)
             COMMENT "Generating JSON AST for ${header_from} to ${header_from}.json\ninclude directoryes are ${inc_dirs}\n"
         )
         ADD_CUSTOM_COMMAND(
+            DEPENDS ${generate_das}
+            OUTPUT ${prefix}.cpp_inc
             TARGET ${tgt}
             WORKING_DIRECTORY ${src_dir}
             VERBATIM
