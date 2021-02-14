@@ -23,19 +23,8 @@ SETUP_COMPILER()
 # DO NOT COMMIT!!!!!!!
 # DO NOT COMMIT!!!!!!!
 
-message(STATUS "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}")
-message(STATUS "CMAKE_INCLUDE_PATH=${CMAKE_INCLUDE_PATH}")
-message(STATUS "CMAKE_FRAMEWORK_PATH=${CMAKE_FRAMEWORK_PATH}")
-
-find_package(OpenGL REQUIRED)
-find_file(GL_H "GL.h")
-find_file(GL_H_UPPER "gl/GL.h")
-find_file(GL_H_LOWER "gl/gl.h")
-message(STATUS "OPENGL_FOUND=${OPENGL_FOUND}")
-message(STATUS "OPENGL_INCLUDE_DIR=${OPENGL_INCLUDE_DIR}")
+find_file(GL_H "gl/gl.h")
 message(STATUS "GL_H=${GL_H}")
-message(STATUS "GL_H_UPPER=${GL_H_UPPER}")
-message(STATUS "GL_H_LOWER=${GL_H_LOWER}")
 message(FATAL_ERROR "stopping intentionally")
 
 
