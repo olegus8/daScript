@@ -16,6 +16,20 @@ FIND_FLEX_AND_BISON()
 
 SETUP_COMPILER()
 
+
+
+# DO NOT COMMIT!!!!!!!
+# DO NOT COMMIT!!!!!!!
+# DO NOT COMMIT!!!!!!!
+# DO NOT COMMIT!!!!!!!
+
+find_package(OpenGL REQUIRED)
+message(status "OPENGL_FOUND=${OPENGL_FOUND}")
+message(status "OPENGL_INCLUDE_DIR=${OPENGL_INCLUDE_DIR}")
+message(fatal_error "stopping intentionally")
+
+
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
