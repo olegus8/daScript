@@ -24,8 +24,12 @@ SETUP_COMPILER()
 # DO NOT COMMIT!!!!!!!
 
 find_package(OpenGL REQUIRED)
+find_file(GL_H_UPPER "GL.h")
+find_file(GL_H_LOWER "gl.h")
 message(STATUS "OPENGL_FOUND=${OPENGL_FOUND}")
 message(STATUS "OPENGL_INCLUDE_DIR=${OPENGL_INCLUDE_DIR}")
+message(STATUS "GL_H_UPPER=${GL_H_UPPER}")
+message(STATUS "GL_H_LOWER=${GL_H_LOWER}")
 message(FATAL_ERROR "stopping intentionally")
 
 
