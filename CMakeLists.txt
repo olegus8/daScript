@@ -24,9 +24,9 @@ SETUP_COMPILER()
 # DO NOT COMMIT!!!!!!!
 
 find_package(OpenGL REQUIRED)
-message(status "OPENGL_FOUND=${OPENGL_FOUND}")
-message(status "OPENGL_INCLUDE_DIR=${OPENGL_INCLUDE_DIR}")
-message(fatal_error "stopping intentionally")
+message(STATUS "OPENGL_FOUND=${OPENGL_FOUND}")
+message(STATUS "OPENGL_INCLUDE_DIR=${OPENGL_INCLUDE_DIR}")
+message(FATAL_ERROR "stopping intentionally")
 
 
 
