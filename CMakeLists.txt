@@ -16,19 +16,6 @@ FIND_FLEX_AND_BISON()
 
 SETUP_COMPILER()
 
-
-
-# DO NOT COMMIT!!!!!!!
-# DO NOT COMMIT!!!!!!!
-# DO NOT COMMIT!!!!!!!
-# DO NOT COMMIT!!!!!!!
-
-find_file(GL_H "gl/gl.h")
-message(STATUS "GL_H=${GL_H}")
-message(FATAL_ERROR "stopping intentionally")
-
-
-
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
