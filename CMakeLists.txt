@@ -128,7 +128,7 @@ IF(CLANG_BIN_EXE)
             TARGET ${tgt}
             WORKING_DIRECTORY ${src_dir}
             VERBATIM
-            COMMAND daScript ${generate_das} -args ${header_from}.json ${prefix} ${extras}
+            COMMAND daScript ${generate_das} -args ${header_from}.json ${prefix} "${extras}"
             COMMENT "Generating C++ bindings from ${header_from}.json\n"
         )
     ENDMACRO()
