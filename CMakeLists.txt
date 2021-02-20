@@ -111,12 +111,14 @@ MACRO(UNITIZE_BUILD input_dir genList)
     list(APPEND ${genList} ${unitList})
 ENDMACRO()
 
+ADD_CUSTOM_TARGET(ALL_BINDINGS)
 FIND_PROGRAM(CLANG_BIN_EXE clang)
 IF(CLANG_BIN_EXE)
     MACRO(CPP_BIND_AST tgt generate_das header_from prefix src_dir inc_dirs extras)
         MESSAGE(STATUS "Generating C++ bindings target ${tgt} from ${header_from}")
         ADD_CUSTOM_TARGET(${tgt})
         ADD_DEPENDENCIES(${tgt} daScript)
+        ADD_DEPENDENCIES(ALL_BINDINGS ${tgt})
         ADD_CUSTOM_COMMAND(
             TARGET ${tgt}
             WORKING_DIRECTORY ${src_dir}
