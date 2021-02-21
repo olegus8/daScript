@@ -40,6 +40,8 @@ var allow_extern_c = false
 
 var ex_enums : table<string; ExEnum>
 
+var substitute_field_types : table<string; string>
+
 /*
     end of configuration
 */
@@ -504,6 +506,7 @@ def genStructs(hf,mf,df:FILE const?)
         fprint(mf,"struct {st.name}_GeneratedAnnotation : ManagedStructureAnnotation<{st.cppName}> \{\n")
         if isLocalType(st.name)
             fprint(mf,"\tvirtual bool isLocal() const override \{ return true; \}\n")
+            fprint(mf,"\tvirtual bool canBePlacedInContainer() const override \{ return true; \}\n")
         fprint(mf,"\t{st.name}_GeneratedAnnotation(ModuleLibrary & ml) : ManagedStructureAnnotation (\"{st.name}\", ml) \{\n")
         fprint(mf,"\t\}\n")
         fprint(mf,"\tvoid init () \{\n")
@@ -512,7 +515,14 @@ def genStructs(hf,mf,df:FILE const?)
                 continue
             if fld.isBitfield           // TODO: support bitfields
                 continue
-            fprint(mf,"\t\taddField<DAS_BIND_MANAGED_FIELD({fld.cppName})>(\"{fld.name}\",\"{fld.cppName}\");\n")
+            var substType = ""
+            substitute_field_types |> find_if_exists("{st.cppName}::{fld.cppName}") <| $ ( val )
+                if val != null
+                    substType = *val
+            if substType |> empty()
+                fprint(mf,"\t\taddField<DAS_BIND_MANAGED_FIELD({fld.cppName})>(\"{fld.name}\",\"{fld.cppName}\");\n")
+            else
+                fprint(mf,"\t\taddField<{substType},offsetof(ManagedType,{fld.cppName})>(\"{fld.name}\",\"{fld.cppName}\");\n")
         fprint(mf,"\t\}\n\};\n")
     for st in values(ast.structs)
         if !needToGenStruct(st)
