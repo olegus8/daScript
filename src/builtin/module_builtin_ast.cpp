@@ -976,7 +976,7 @@ namespace das {
         ft->argNames = { "ref", "constant", "temporary", "_implicit",
             "removeRef", "removeConstant", "removeDim",
             "removeTemporary", "explicitConst", "aotAlias", "smartPtr",
-            "smartPtrNative", "isExplicit" };
+            "smartPtrNative", "isExplicit", "isNativeDim" };
         return ft;
     }
 
@@ -1041,7 +1041,7 @@ namespace das {
             addProperty<DAS_BIND_MANAGED_PROP(getTupleAlign)>("tupleAlign","getTupleAlign");
             addProperty<DAS_BIND_MANAGED_PROP(getVariantSize)>("variantSize","getVariantSize");
             addProperty<DAS_BIND_MANAGED_PROP(getVariantAlign)>("variantAlign","getVariantAlign");
-            addProperty<DAS_BIND_MANAGED_PROP(canCopy)>("canCopy","canCopy");
+            addProperty<bool (TypeDecl::*)() const, &ManagedType::canCopy>("canCopy","canCopy");
             addProperty<DAS_BIND_MANAGED_PROP(canMove)>("canMove","canMove");
             addProperty<DAS_BIND_MANAGED_PROP(canClone)>("canClone","canClone");
             addProperty<DAS_BIND_MANAGED_PROP(canNew)>("canNew","canNew");
@@ -2213,7 +2213,7 @@ namespace das {
 
     bool addModuleVariable ( Module * module, VariablePtr & _var, Context * ) {
         VariablePtr var = move(_var);
-        return module->addVariable(move(var), false);
+        return module->addVariable(move(var), true);
     }
 
     bool addModuleStructure ( Module * module, StructurePtr & _struct, Context * ) {

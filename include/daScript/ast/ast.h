@@ -105,6 +105,7 @@ namespace das
     public:
         struct EnumEntry {
             string          name;
+            string          cppName;
             LineInfo        at;
             ExpressionPtr   value;
         };
@@ -113,7 +114,9 @@ namespace das
         Enumeration( const string & na ) : name(na) {}
         bool add ( const string & f, const LineInfo & at );
         bool add ( const string & f, const ExpressionPtr & expr, const LineInfo & at );
+        bool addEx ( const string & f, const string & fcpp, const ExpressionPtr & expr, const LineInfo & at );
         bool addI ( const string & f, int64_t value, const LineInfo & at );
+        bool addIEx ( const string & f, const string & fcpp, int64_t value, const LineInfo & at );
         string describe() const { return name; }
         string getMangledName() const;
         int64_t find ( const string & na, int64_t def ) const;
@@ -168,7 +171,8 @@ namespace das
         const Structure * findFieldParent ( const string & name ) const;
         int getSizeOf() const;
         int getAlignOf() const;
-        bool canCopy() const;
+        __forceinline bool canCopy() const { return canCopy(false); }
+        bool canCopy(bool tempMatters) const;
         bool canClone() const;
         bool canMove() const;
         bool canAot() const;
@@ -1009,6 +1013,7 @@ namespace das
         uint32_t    stack = 16*1024;                    // 0 for unique stack
         bool        intern_strings = false;             // use string interning lookup for regular string heap
         bool        persistent_heap = false;
+        bool        multiple_contexts = false;          // code supports context safety
         uint32_t    heap_size_hint = 65536;
         uint32_t    string_heap_size_hint = 65536;
     // rtti

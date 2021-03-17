@@ -33,6 +33,7 @@ namespace das {
         InferTypes( const ProgramPtr & prog ) : FoldingVisitor(prog ) {
             enableInferTimeFolding = prog->options.getBoolOption("infer_time_folding",true);
             disableAot = prog->options.getBoolOption("no_aot",false);
+            multiContext = prog->options.getBoolOption("multiple_contexts", prog->policies.multiple_contexts);
         }
         bool finished() const { return !needRestart; }
         bool verbose = true;
@@ -51,8 +52,9 @@ namespace das {
         bool                    cppLayoutPod = false;
         const Structure *       cppLayoutParent = nullptr;
         bool                    needRestart = false;
-        bool                    enableInferTimeFolding;
-        bool                    disableAot;
+        bool                    enableInferTimeFolding = true;
+        bool                    disableAot = false;
+        bool                    multiContext = false;
         Expression *            lastEnuValue = nullptr;
         int32_t                 unsafeDepth = 0;
     public:
@@ -310,7 +312,7 @@ namespace das {
                 }
             }
             TypeDeclPtr mtd = program->makeTypeDeclaration(LineInfo(),name);
-            return mtd->isAlias() ? nullptr : mtd;
+            return (!mtd || mtd->isAlias()) ? nullptr : mtd;
         }
 
         // WARNING: this is really really slow, use faster tests when u can isAutoOrAlias for one
@@ -777,9 +779,9 @@ namespace das {
             return ss.str();
         }
 
-        string describeMismatchingArgument( const string & argName, const TypeDeclPtr & passType, const TypeDeclPtr & argType ) const {
+        string describeMismatchingArgument( const string & argName, const TypeDeclPtr & passType, const TypeDeclPtr & argType, int argIndex ) const {
             TextWriter ss;
-            ss << "\t\tinvalid argument " << argName << ". expecting "
+            ss << "\t\tinvalid argument " << argName << " (" << argIndex << "). expecting "
                 << describeType(argType) << ", passing " << describeType(passType) << "\n";
             if (passType->isAlias()) {
                 ss << "\t\t" << reportAliasError(passType) << "\n";
@@ -830,7 +832,7 @@ namespace das {
                 auto & passType = arg->value->type;
                 auto & argType = pFn->arguments[fnArgIndex]->type;
                 if (!isMatchingArgument(pFn, pFn->arguments[fnArgIndex]->type, passType,inferAuto,inferBlock)) {
-                    ss << describeMismatchingArgument(arg->name, passType, argType);
+                    ss << describeMismatchingArgument(arg->name, passType, argType, (int)ai);
                 }
                 fnArgIndex ++;
             }
@@ -852,7 +854,7 @@ namespace das {
                 auto & arg = pFn->arguments[ai];
                 auto & passType = types[ai];
                 if (!isMatchingArgument(pFn, arg->type, passType, inferAuto, inferBlock)) {
-                    ss << describeMismatchingArgument(arg->name, passType, arg->type);
+                    ss << describeMismatchingArgument(arg->name, passType, arg->type, (int)ai);
                 }
             }
             for ( ; ai!= pFn->arguments.size(); ++ai ) {
@@ -1965,7 +1967,6 @@ namespace das {
             if ( expr->arguments.size()==2 && !expr->arguments[1]->rtti_isStringConstant() ) {
                 error("static assert comment must be string constant",  "", "",
                     expr->at, CompilationError::invalid_argument_type);
-                return nullptr;
             }
             expr->type = make_smart<TypeDecl>(Type::tVoid);
             return Visitor::visit(expr);
@@ -2371,7 +2372,7 @@ namespace das {
                 auto & passType = expr->arguments[i+1]->type;
                 auto & argType = blockT->argTypes[i];
                 if ( !isMatchingArgument(nullptr, argType, passType, false,false) ) {
-                    auto extras = verbose ? ("\n" + describeMismatchingArgument(to_string(i+1), passType, argType)) : "";
+                    auto extras = verbose ? ("\n" + describeMismatchingArgument(to_string(i+1), passType, argType, (int)i)) : "";
                     error("incompatible argument " + to_string(i+1),
                         "\t" + describeType(passType) + " vs " + describeType(argType) + extras, "",
                         expr->at, CompilationError::invalid_argument_type);
@@ -2752,6 +2753,12 @@ namespace das {
                 } else if (expr->trait == "is_function") {
                      reportAstChanged();
                      return make_smart<ExprConstBool>(expr->at, expr->typeexpr->isFunction());
+                } else if (expr->trait == "is_void") {
+                     reportAstChanged();
+                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->isVoid());
+                } else if (expr->trait == "is_void_pointer") {
+                     reportAstChanged();
+                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->isVoidPointer());
                 } else if ( expr->trait=="can_be_placed_in_container" ) {
                     reportAstChanged();
                     return make_smart<ExprConstBool>(expr->at, expr->typeexpr->canBePlacedInContainer());
@@ -4640,7 +4647,7 @@ namespace das {
                 if ( cloneType->isHandle() ) {
                     expr->type = make_smart<TypeDecl>();  // we return nothing
                     return Visitor::visit(expr);
-                } else if ( cloneType->isString() && expr->right->type->isTemp() ) {
+                } else if ( cloneType->isString() && (expr->right->type->isTemp() || multiContext) ) {
                     reportAstChanged();
                     auto cloneFn = make_smart<ExprCall>(expr->at, "clone_string");
                     cloneFn->arguments.push_back(expr->right->clone());
@@ -4657,14 +4664,11 @@ namespace das {
                         reportMissingFinalizer("smart pointer clone mismatch ", expr->at, cloneType);
                         return Visitor::visit(expr);
                     }
-                } else if ( cloneType->canCopy() ) {
-                    if ( expr->right->type->isTemp(true,false) ) {
-                        error("can't clone (copy) temporary value", "", "",
-                            expr->at, CompilationError::cant_pass_temporary);
-                    } else {
-                        reportAstChanged();
-                        return make_smart<ExprCopy>(expr->at, expr->left->clone(), expr->right->clone());
-                    }
+                } else if ( cloneType->canCopy(expr->right->type->isTemp() || multiContext) ) {
+                    reportAstChanged();
+                    auto eCopy = make_smart<ExprCopy>(expr->at, expr->left->clone(), expr->right->clone());
+                    eCopy->allowCopyTemp = true;
+                    return eCopy;
                 } else if ( cloneType->isGoodArrayType() || cloneType->isGoodTableType() ) {
                     reportAstChanged();
                     auto cloneFn = make_smart<ExprCall>(expr->at, "_::clone");
@@ -5972,11 +5976,16 @@ namespace das {
         }
     // StringBuilder
         virtual ExpressionPtr visitStringBuilderElement ( ExprStringBuilder *, Expression * expr, bool ) override {
-            return Expression::autoDereference(expr);
+            auto res = Expression::autoDereference(expr);
+            if ( expr->constexpression ) {
+                return evalAndFoldString(res.get());
+            } else {
+                return res;
+            }
         }
         virtual ExpressionPtr visit ( ExprStringBuilder * expr ) override {
             expr->type = make_smart<TypeDecl>(Type::tString);
-            return Visitor::visit(expr);
+            return evalAndFoldStringBuilder(expr);
         }
     // make variant
         virtual void preVisit ( ExprMakeVariant * expr ) override {

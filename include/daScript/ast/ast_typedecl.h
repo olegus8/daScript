@@ -105,7 +105,8 @@ namespace das {
         int getVariantFieldOffset ( int index ) const;
         int getVariantUniqueFieldIndex ( const TypeDeclPtr & uniqueType ) const;
         string describe ( DescribeExtra extra = DescribeExtra::yes, DescribeContracts contracts = DescribeContracts::yes, DescribeModule module = DescribeModule::yes) const;
-        bool canCopy() const;
+        __forceinline bool canCopy() const { return canCopy(false); }
+        bool canCopy(bool tempMatters) const;
         bool canMove() const;
         bool canClone() const;
         bool canNew() const;
@@ -186,6 +187,7 @@ namespace das {
                 bool    smartPtr : 1;
                 bool    smartPtrNative : 1;
                 bool    isExplicit : 1;
+                bool    isNativeDim : 1;
             };
             uint32_t flags = 0;
         };
@@ -454,6 +456,7 @@ namespace das {
             auto t = typeFactory<TT>::make(lib);
             t->dim.push_back(dim);
             t->ref = false;
+            t->isNativeDim = true;
             return t;
         }
     };
