@@ -2729,7 +2729,7 @@ namespace das
         }
         context.heap->setInitialSize ( options.getIntOption("heap_size_hint", policies.heap_size_hint) );
         context.stringHeap->setInitialSize ( options.getIntOption("string_heap_size_hint", policies.string_heap_size_hint) );
-        context.constStringHeap = make_smart<ConstStringAllocator>();
+        context.constStringHeap = make_shared<ConstStringAllocator>();
         if ( globalStringHeapSize ) {
             context.constStringHeap->setInitialSize(globalStringHeapSize);
         }
@@ -2797,7 +2797,7 @@ namespace das
                     if (!pvar->used)
                         continue;
                     auto & gvar = context.globalVariables[pvar->index];
-                    if ( pvar->init ) {
+                    if ( !folding && pvar->init ) {
                         if ( pvar->init->rtti_isMakeLocal() ) {
                             if ( pvar->global_shared ) {
                                 auto sl = context.code->makeNode<SimNode_GetShared>(pvar->init->at, pvar->stackTop, pvar->getMangledNameHash());
@@ -2830,8 +2830,12 @@ namespace das
             isSimulating = false;
             return false;
         }
-        fusion(context, logs);
-        context.relocateCode();
+#if DAS_FUSION
+        if ( !folding ) {               // note: only run fusion when not folding
+            fusion(context, logs);
+            context.relocateCode();
+        }
+#endif
         context.restart();
         // now call annotation simulate
         das_hash_map<int,Function *> indexToFunction;
@@ -2852,7 +2856,13 @@ namespace das
             }
         }
         // verify code and string heaps
-        DAS_ASSERTF(context.code->depth()<=1, "code must come in one page");
+#if DAS_FUSION
+        if ( !folding ) {
+            // note: this only matters if code has significant jumping around
+            // which is always introduced by fusion
+            DAS_ASSERTF(context.code->depth()<=1, "code must come in one page");
+        }
+#endif
         DAS_ASSERTF(context.constStringHeap->depth()<=1, "strings must come in one page");
         context.stringHeap->setIntern(options.getBoolOption("intern_strings", policies.intern_strings));
         // log all functions
@@ -2875,21 +2885,23 @@ namespace das
             }
         }
         // run init script and restart
-        if (!context.runWithCatch([&]() {
-            if (context.stack.size()) {
-                context.runInitScript();
-            } else if ( sharedStack ) {
-                SharedStackGuard guard(context, *sharedStack);
-                context.runInitScript();
-            } else {
-                auto ssz = getContextStackSize();
-                StackAllocator stack(ssz ? ssz : 16384);    // at least some stack
-                SharedStackGuard guard(context, stack);
-                context.runInitScript();
+        if ( !folding ) {
+            if (!context.runWithCatch([&]() {
+                if ( context.stack.size() && context.stack.size()>globalInitStackSize ) {
+                    context.runInitScript();
+                } else if ( sharedStack && sharedStack->size()>globalInitStackSize ) {
+                    SharedStackGuard guard(context, *sharedStack);
+                    context.runInitScript();
+                } else {
+                    auto ssz = max ( getContextStackSize(), 16384 ) + globalInitStackSize;
+                    StackAllocator init_stack(ssz);
+                    SharedStackGuard guard(context, init_stack);
+                    context.runInitScript();
+                }
+            })) {
+                string exc = context.getException();
+                error("exception during init script", exc, "", LineInfo(), CompilationError::cant_initialize);
             }
-        })) {
-            string exc = context.getException();
-            error("exception during init script", exc, "", LineInfo(), CompilationError::cant_initialize);
         }
         context.restart();
         if (options.getBoolOption("log_mem",false)) {

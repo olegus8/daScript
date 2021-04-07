@@ -615,6 +615,7 @@ namespace das
             result = td;
             return this;
         }
+        Function * getOrigin() const;
     public:
         AnnotationList      annotations;
         string              name;
@@ -986,8 +987,8 @@ namespace das
 
     class DebugInfoHelper : ptr_ref_count {
     public:
-        DebugInfoHelper () { debugInfo = make_smart<DebugInfoAllocator>(); }
-        DebugInfoHelper ( const smart_ptr<DebugInfoAllocator> & di ) : debugInfo(di) {}
+        DebugInfoHelper () { debugInfo = make_shared<DebugInfoAllocator>(); }
+        DebugInfoHelper ( const shared_ptr<DebugInfoAllocator> & di ) : debugInfo(di) {}
     public:
         TypeInfo * makeTypeInfo ( TypeInfo * info, const TypeDeclPtr & type );
         VarInfo * makeVariableDebugInfo ( const Variable & var );
@@ -998,7 +999,7 @@ namespace das
         FuncInfo * makeInvokeableTypeDebugInfo ( const TypeDeclPtr & blk, const LineInfo & at );
         void appendLocalVariables ( FuncInfo * info, const ExpressionPtr & body );
     public:
-        smart_ptr<DebugInfoAllocator>  debugInfo;
+        shared_ptr<DebugInfoAllocator>  debugInfo;
         bool                            rtti = false;
     protected:
         das_map<string,StructInfo *>        smn2s;
@@ -1103,7 +1104,7 @@ namespace das
         vector<ReaderMacroPtr> getReaderMacro ( const string & markup ) const;
     public:
         template <typename TT>
-        string describeCandidates ( const vector<TT> & result, bool needHeader = true ) const {
+        string describeCandidates ( const TT & result, bool needHeader = true ) const {
             if ( !result.size() ) return "";
             TextWriter ss;
             if ( needHeader ) ss << "candidates are:";
@@ -1126,6 +1127,7 @@ namespace das
         vector<Error>               errors;
         uint32_t                    globalInitStackSize = 0;
         uint32_t                    globalStringHeapSize = 0;
+        bool                        folding = false;
         union {
             struct {
                 bool    failToCompile : 1;
